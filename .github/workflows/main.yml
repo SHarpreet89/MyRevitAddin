@@ -19,69 +19,84 @@ jobs:
       - name: Install .NET Framework 4.8 Dev Pack
         run: choco install netfx-4.8-devpack -y
 
-      - name: Download and extract Revit API DLLs
-  shell: pwsh
-  run: |
-    Write-Host "📦 Downloading Revit API dependencies..."
+      - name: Download and extract Revit API DLLs (Google Drive confirm bypass)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
 
-    $fileId = "1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-    $confirmUrl = "https://drive.google.com/uc?export=download&id=$fileId"
-    $finalOutFile = "RevitApis.zip"
+          $fileId = "1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
+          $base = "https://drive.google.com/uc?export=download&id=$fileId"
+          $zipPath = "RevitApis.zip"
+          $tmpHtml = "temp_warning.html"
 
-    # Step 1: Fetch the potential warning page and extract confirm token
-    try {
-      $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      $warningResponse = Invoke-WebRequest -Uri $confirmUrl -WebSession $session -OutFile "temp_warning.html"
+          Write-Host "📥 Requesting Google Drive URL..."
+          $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-      # Check if it's a warning page (look for confirm token in HTML)
-      $warningHtml = Get-Content "temp_warning.html" -Raw
-      if ($warningHtml -match 'confirm=([0-9A-Za-z_]+)') {
-        $confirmToken = $matches[1]
-        Write-Host "✅ Found confirm token: $confirmToken (bypassing virus scan)"
+          # First request: may return warning HTML
+          Invoke-WebRequest -Uri $base -WebSession $session -OutFile $tmpHtml
 
-        # Step 2: Re-request with confirm token to get the real ZIP
-        $downloadUrl = "https://drive.google.com/uc?export=download&confirm=$confirmToken&id=$fileId"
-        Invoke-WebRequest -Uri $downloadUrl -WebSession $session -OutFile $finalOutFile
+          $html = Get-Content $tmpHtml -Raw
 
-        # Verify size (should be much larger now)
-        $size = (Get-Item $finalOutFile).Length
-        Write-Host "📏 Final download size: $size bytes"
-        if ($size -lt 10000) { throw "❌ Download still too small (likely still HTML)" }
-      } else {
-        # No warning; direct download succeeded
-        Rename-Item "temp_warning.html" $finalOutFile
-        Write-Host "✅ Direct download (no warning needed)"
-      }
-    } catch {
-      throw "❌ Download failed: $_"
-    } finally {
-      Remove-Item "temp_warning.html" -ErrorAction SilentlyContinue
-    }
+          # If it's already a zip (rare), rename and continue
+          # Most of the time, it's HTML. Check for confirm token.
+          if ($html -match 'confirm=([0-9A-Za-z_-]+)') {
+            $token = $matches[1]
+            Write-Host "✅ Found confirm token: $token"
+            $dl = "https://drive.google.com/uc?export=download&confirm=$token&id=$fileId"
+            Invoke-WebRequest -Uri $dl -WebSession $session -OutFile $zipPath
+          } else {
+            # Occasionally Drive serves the file directly – detect via magic bytes after saving
+            Move-Item $tmpHtml $zipPath -Force
+          }
 
-    Write-Host "📂 Extracting RevitApis.zip..."
-    Expand-Archive -Path $finalOutFile -DestinationPath "." -Force
+          Remove-Item $tmpHtml -ErrorAction SilentlyContinue
 
-    Write-Host "📁 Listing extracted files (recursive)..."
-    Get-ChildItem -Path . -Recurse | ForEach-Object { Write-Host $_.FullName }
+          # Basic validation – size + magic bytes
+          if (-not (Test-Path $zipPath)) { throw "❌ No ZIP downloaded." }
+          $size = (Get-Item $zipPath).Length
+          Write-Host "📏 Downloaded size: $size bytes"
+          if ($size -lt 10000) {
+            $peek = (Get-Content $zipPath -Raw -TotalCount 500)
+            Write-Host "🔎 First 500 chars (likely HTML):"
+            Write-Host $peek
+            throw "❌ Downloaded file is too small (likely HTML warning page)."
+          }
 
-    Write-Host "🔍 Searching for Revit DLLs recursively..."
-    $dlls = Get-ChildItem -Path . -Recurse -Filter "RevitAPI*.dll"
+          # Check PK header
+          $fs = [System.IO.File]::OpenRead($zipPath)
+          try {
+            $b0 = $fs.ReadByte(); $b1 = $fs.ReadByte()
+          } finally {
+            $fs.Dispose()
+          }
+          if ($b0 -ne 0x50 -or $b1 -ne 0x4B) {
+            throw "❌ Not a ZIP (missing PK header) – Google Drive likely returned HTML."
+          }
+          Write-Host "✅ ZIP signature OK (PK)."
 
-    if ($dlls.Count -eq 0) {
-      throw "❌ No RevitAPI DLLs found after extraction!"
-    }
+          Write-Host "📂 Extracting..."
+          Expand-Archive -Path $zipPath -DestinationPath "." -Force
 
-    foreach ($dll in $dlls) {
-      Write-Host "➡ Copying $($dll.FullName) to root..."
-      Copy-Item $dll.FullName -Destination . -Force
-    }
+          Write-Host "📁 Listing extracted files (recursive)…"
+          Get-ChildItem -Recurse | ForEach-Object { $_.FullName }
 
-    Write-Host "✅ Final DLLs in root:"
-    Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "🔍 Looking for Revit API DLLs…"
+          $dlls = Get-ChildItem -Recurse -Filter "RevitAPI*.dll"
+          if ($dlls.Count -eq 0) {
+            throw "❌ No RevitAPI*.dll found after extraction."
+          }
 
-    # Cleanup ZIP to save space in Actions
-    Remove-Item $finalOutFile -Force
+          foreach ($dll in $dlls) {
+            Write-Host "➡ Copying $($dll.FullName) -> $(Resolve-Path .)"
+            Copy-Item $dll.FullName -Destination . -Force
+          }
+
+          Write-Host "✅ DLLs in repo root now:"
+          Get-ChildItem -Filter "RevitAPI*.dll" | ForEach-Object { $_.FullName }
+
+          # Optional: cleanup ZIP to save space
+          Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 
       - name: Build Revit Addin
         run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
