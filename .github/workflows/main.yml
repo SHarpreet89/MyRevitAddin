@@ -19,15 +19,26 @@ jobs:
       - name: Install .NET Framework 4.8 Dev Pack
         run: choco install netfx-4.8-devpack -y
 
-      # 🧩 Download the Revit API ZIP from Google Drive
+      # 🧩 Download and extract Revit API DLLs from Google Drive
       - name: Download and extract Revit API DLLs
+        shell: pwsh
         run: |
+          Write-Host "Downloading Revit API dependencies..."
           curl -L -o RevitApis.zip "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-          tar -xf RevitApis.zip
+          Expand-Archive -Path RevitApis.zip -DestinationPath .
+          Write-Host "Extracted contents:"
+          Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { $_.FullName }
 
+          if (-not (Test-Path ".\RevitAPI.dll") -or -not (Test-Path ".\RevitAPIUI.dll")) {
+            Write-Error "❌ RevitAPI.dll or RevitAPIUI.dll not found after extraction. Build cancelled."
+            exit 1
+          }
+
+      # 🧱 Build your Revit Addin project
       - name: Build Revit Addin
         run: msbuild MyRevitAddin.csproj /p:Configuration=Release
 
+      # 📦 Upload compiled DLL as artifact
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
