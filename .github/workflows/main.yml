@@ -20,32 +20,68 @@ jobs:
         run: choco install netfx-4.8-devpack -y
 
       - name: Download and extract Revit API DLLs
-        shell: pwsh
-        run: |
-          Write-Host "📦 Downloading Revit API dependencies..."
-          $url = "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-          Invoke-WebRequest -Uri $url -OutFile "RevitApis.zip"
+  shell: pwsh
+  run: |
+    Write-Host "📦 Downloading Revit API dependencies..."
 
-          Write-Host "📂 Extracting RevitApis.zip..."
-          Expand-Archive -Path "RevitApis.zip" -DestinationPath "." -Force
+    $fileId = "1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
+    $confirmUrl = "https://drive.google.com/uc?export=download&id=$fileId"
+    $finalOutFile = "RevitApis.zip"
 
-          Write-Host "📁 Listing extracted files (recursive)..."
-          Get-ChildItem -Path . -Recurse | ForEach-Object { Write-Host $_.FullName }
+    # Step 1: Fetch the potential warning page and extract confirm token
+    try {
+      $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      $warningResponse = Invoke-WebRequest -Uri $confirmUrl -WebSession $session -OutFile "temp_warning.html"
 
-          Write-Host "🔍 Searching for Revit DLLs recursively..."
-          $dlls = Get-ChildItem -Path . -Recurse -Filter "RevitAPI*.dll"
+      # Check if it's a warning page (look for confirm token in HTML)
+      $warningHtml = Get-Content "temp_warning.html" -Raw
+      if ($warningHtml -match 'confirm=([0-9A-Za-z_]+)') {
+        $confirmToken = $matches[1]
+        Write-Host "✅ Found confirm token: $confirmToken (bypassing virus scan)"
 
-          if ($dlls.Count -eq 0) {
-            throw "❌ No RevitAPI DLLs found after extraction!"
-          }
+        # Step 2: Re-request with confirm token to get the real ZIP
+        $downloadUrl = "https://drive.google.com/uc?export=download&confirm=$confirmToken&id=$fileId"
+        Invoke-WebRequest -Uri $downloadUrl -WebSession $session -OutFile $finalOutFile
 
-          foreach ($dll in $dlls) {
-            Write-Host "➡ Copying $($dll.FullName) to root..."
-            Copy-Item $dll.FullName -Destination . -Force
-          }
+        # Verify size (should be much larger now)
+        $size = (Get-Item $finalOutFile).Length
+        Write-Host "📏 Final download size: $size bytes"
+        if ($size -lt 10000) { throw "❌ Download still too small (likely still HTML)" }
+      } else {
+        # No warning; direct download succeeded
+        Rename-Item "temp_warning.html" $finalOutFile
+        Write-Host "✅ Direct download (no warning needed)"
+      }
+    } catch {
+      throw "❌ Download failed: $_"
+    } finally {
+      Remove-Item "temp_warning.html" -ErrorAction SilentlyContinue
+    }
 
-          Write-Host "✅ Final DLLs in root:"
-          Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
+    Write-Host "📂 Extracting RevitApis.zip..."
+    Expand-Archive -Path $finalOutFile -DestinationPath "." -Force
+
+    Write-Host "📁 Listing extracted files (recursive)..."
+    Get-ChildItem -Path . -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+    Write-Host "🔍 Searching for Revit DLLs recursively..."
+    $dlls = Get-ChildItem -Path . -Recurse -Filter "RevitAPI*.dll"
+
+    if ($dlls.Count -eq 0) {
+      throw "❌ No RevitAPI DLLs found after extraction!"
+    }
+
+    foreach ($dll in $dlls) {
+      Write-Host "➡ Copying $($dll.FullName) to root..."
+      Copy-Item $dll.FullName -Destination . -Force
+    }
+
+    Write-Host "✅ Final DLLs in root:"
+    Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
+
+    # Cleanup ZIP to save space in Actions
+    Remove-Item $finalOutFile -Force
 
       - name: Build Revit Addin
         run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
