@@ -19,84 +19,47 @@ jobs:
       - name: Install .NET Framework 4.8 Dev Pack
         run: choco install netfx-4.8-devpack -y
 
-      - name: Download and extract Revit API DLLs (Google Drive confirm bypass)
+      # Use gdown to download from Google Drive (handles confirm token automatically)
+      - name: Install gdown
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip gdown
+
+      - name: Download Revit API ZIP from Google Drive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $fileId = "1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
+          python -m gdown --id $fileId -O RevitApis.zip
+
+          # Sanity checks
+          if (-not (Test-Path RevitApis.zip)) { throw "❌ RevitApis.zip not found after gdown." }
+          $size = (Get-Item RevitApis.zip).Length
+          Write-Host "📏 Downloaded ZIP size: $size bytes"
+          if ($size -lt 10000) { throw "❌ Downloaded file suspiciously small." }
+
+      - name: Extract and stage Revit API DLLs
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          $fileId = "1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-          $base = "https://drive.google.com/uc?export=download&id=$fileId"
-          $zipPath = "RevitApis.zip"
-          $tmpHtml = "temp_warning.html"
+          Write-Host "📂 Extracting ZIP..."
+          Expand-Archive -Path RevitApis.zip -DestinationPath . -Force
 
-          Write-Host "📥 Requesting Google Drive URL..."
-          $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-          # First request: may return warning HTML
-          Invoke-WebRequest -Uri $base -WebSession $session -OutFile $tmpHtml
-
-          $html = Get-Content $tmpHtml -Raw
-
-          # If it's already a zip (rare), rename and continue
-          # Most of the time, it's HTML. Check for confirm token.
-          if ($html -match 'confirm=([0-9A-Za-z_-]+)') {
-            $token = $matches[1]
-            Write-Host "✅ Found confirm token: $token"
-            $dl = "https://drive.google.com/uc?export=download&confirm=$token&id=$fileId"
-            Invoke-WebRequest -Uri $dl -WebSession $session -OutFile $zipPath
-          } else {
-            # Occasionally Drive serves the file directly – detect via magic bytes after saving
-            Move-Item $tmpHtml $zipPath -Force
-          }
-
-          Remove-Item $tmpHtml -ErrorAction SilentlyContinue
-
-          # Basic validation – size + magic bytes
-          if (-not (Test-Path $zipPath)) { throw "❌ No ZIP downloaded." }
-          $size = (Get-Item $zipPath).Length
-          Write-Host "📏 Downloaded size: $size bytes"
-          if ($size -lt 10000) {
-            $peek = (Get-Content $zipPath -Raw -TotalCount 500)
-            Write-Host "🔎 First 500 chars (likely HTML):"
-            Write-Host $peek
-            throw "❌ Downloaded file is too small (likely HTML warning page)."
-          }
-
-          # Check PK header
-          $fs = [System.IO.File]::OpenRead($zipPath)
-          try {
-            $b0 = $fs.ReadByte(); $b1 = $fs.ReadByte()
-          } finally {
-            $fs.Dispose()
-          }
-          if ($b0 -ne 0x50 -or $b1 -ne 0x4B) {
-            throw "❌ Not a ZIP (missing PK header) – Google Drive likely returned HTML."
-          }
-          Write-Host "✅ ZIP signature OK (PK)."
-
-          Write-Host "📂 Extracting..."
-          Expand-Archive -Path $zipPath -DestinationPath "." -Force
-
-          Write-Host "📁 Listing extracted files (recursive)…"
-          Get-ChildItem -Recurse | ForEach-Object { $_.FullName }
-
-          Write-Host "🔍 Looking for Revit API DLLs…"
+          Write-Host "🔍 Searching for RevitAPI*.dll recursively…"
           $dlls = Get-ChildItem -Recurse -Filter "RevitAPI*.dll"
           if ($dlls.Count -eq 0) {
+            Get-ChildItem -Recurse | ForEach-Object { $_.FullName }
             throw "❌ No RevitAPI*.dll found after extraction."
           }
 
           foreach ($dll in $dlls) {
-            Write-Host "➡ Copying $($dll.FullName) -> $(Resolve-Path .)"
+            Write-Host "➡ Copying $($dll.FullName) to repo root…"
             Copy-Item $dll.FullName -Destination . -Force
           }
 
-          Write-Host "✅ DLLs in repo root now:"
+          Write-Host "✅ DLLs staged in root:"
           Get-ChildItem -Filter "RevitAPI*.dll" | ForEach-Object { $_.FullName }
-
-          # Optional: cleanup ZIP to save space
-          Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 
       - name: Build Revit Addin
         run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
