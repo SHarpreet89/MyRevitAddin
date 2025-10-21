@@ -1,27 +1,57 @@
-- name: Download and extract Revit API DLLs
-  shell: pwsh
-  run: |
-    Write-Host "📦 Downloading Revit API dependencies..."
-    $url = "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-    Invoke-WebRequest -Uri $url -OutFile "RevitApis.zip"
+name: Build Revit Addin
 
-    Write-Host "📂 Extracting RevitApis.zip..."
-    Expand-Archive -Path "RevitApis.zip" -DestinationPath "." -Force
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
 
-    Write-Host "📁 Listing extracted files (recursive)..."
-    Get-ChildItem -Path . -Recurse | ForEach-Object { Write-Host $_.FullName }
+jobs:
+  build:
+    runs-on: windows-latest
 
-    Write-Host "🔍 Searching for Revit DLLs recursively..."
-    $dlls = Get-ChildItem -Path . -Recurse -Filter "RevitAPI*.dll"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    if ($dlls.Count -eq 0) {
-      throw "❌ No RevitAPI DLLs found after extraction!"
-    }
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-    foreach ($dll in $dlls) {
-      Write-Host "➡ Copying $($dll.FullName) to root..."
-      Copy-Item $dll.FullName -Destination . -Force
-    }
+      - name: Install .NET Framework 4.8 Dev Pack
+        run: choco install netfx-4.8-devpack -y
 
-    Write-Host "✅ Final DLLs in root:"
-    Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
+      - name: Download and extract Revit API DLLs
+        shell: pwsh
+        run: |
+          Write-Host "📦 Downloading Revit API dependencies..."
+          $url = "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
+          Invoke-WebRequest -Uri $url -OutFile "RevitApis.zip"
+
+          Write-Host "📂 Extracting RevitApis.zip..."
+          Expand-Archive -Path "RevitApis.zip" -DestinationPath "." -Force
+
+          Write-Host "📁 Listing extracted files (recursive)..."
+          Get-ChildItem -Path . -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+          Write-Host "🔍 Searching for Revit DLLs recursively..."
+          $dlls = Get-ChildItem -Path . -Recurse -Filter "RevitAPI*.dll"
+
+          if ($dlls.Count -eq 0) {
+            throw "❌ No RevitAPI DLLs found after extraction!"
+          }
+
+          foreach ($dll in $dlls) {
+            Write-Host "➡ Copying $($dll.FullName) to root..."
+            Copy-Item $dll.FullName -Destination . -Force
+          }
+
+          Write-Host "✅ Final DLLs in root:"
+          Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Build Revit Addin
+        run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyRevitAddin
+          path: bin\Release\
