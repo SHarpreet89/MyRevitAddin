@@ -1,8 +1,8 @@
 name: Build Revit Addin
 
 on:
-  workflow_dispatch: # lets you run manually from the Actions tab
-  push:               # also builds when you push changes
+  workflow_dispatch:
+  push:
     branches: [ main ]
 
 jobs:
@@ -16,17 +16,20 @@ jobs:
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Add .NET Framework targeting pack
-        run: |
-          choco install netfx-4.8-devpack -y
+      - name: Install .NET Framework 4.8 Dev Pack
+        run: choco install netfx-4.8-devpack -y
 
-      - name: Build the Revit Addin
+      # 🧩 Download the Revit API ZIP from Google Drive
+      - name: Download and extract Revit API DLLs
         run: |
-          msbuild MyRevitAddin.csproj /p:Configuration=Release
+          curl -L -o RevitApis.zip "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
+          tar -xf RevitApis.zip
+
+      - name: Build Revit Addin
+        run: msbuild MyRevitAddin.csproj /p:Configuration=Release
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: MyRevitAddin
-          path: |
-            bin\Release\
+          path: bin\Release\
