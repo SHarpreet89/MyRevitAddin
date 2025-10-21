@@ -23,20 +23,28 @@ jobs:
       - name: Download and extract Revit API DLLs
         shell: pwsh
         run: |
-          Write-Host "Downloading Revit API dependencies..."
-          curl -L -o RevitApis.zip "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-          Expand-Archive -Path RevitApis.zip -DestinationPath .
-          Write-Host "Extracted contents:"
-          Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { $_.FullName }
+          Write-Host "📦 Downloading Revit API dependencies..."
+          $url = "https://drive.google.com/uc?export=download&id=1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
+          Invoke-WebRequest -Uri $url -OutFile "RevitApis.zip"
 
-          if (-not (Test-Path ".\RevitAPI.dll") -or -not (Test-Path ".\RevitAPIUI.dll")) {
-            Write-Error "❌ RevitAPI.dll or RevitAPIUI.dll not found after extraction. Build cancelled."
-            exit 1
+          Write-Host "📂 Extracting RevitApis.zip..."
+          Expand-Archive -Path "RevitApis.zip" -DestinationPath "." -Force
+
+          Write-Host "🧩 Verifying DLLs..."
+          $api = Test-Path ".\RevitAPI.dll"
+          $ui  = Test-Path ".\RevitAPIUI.dll"
+          if (-not $api -or -not $ui) {
+            Write-Host "Files in current directory:"
+            Get-ChildItem -Path . | ForEach-Object { $_.FullName }
+            throw "❌ RevitAPI.dll or RevitAPIUI.dll not found after extraction. Build cancelled."
           }
+
+          Write-Host "✅ DLLs found successfully:"
+          Get-ChildItem -Path . -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
 
       # 🧱 Build your Revit Addin project
       - name: Build Revit Addin
-        run: msbuild MyRevitAddin.csproj /p:Configuration=Release
+        run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
 
       # 📦 Upload compiled DLL as artifact
       - name: Upload build artifact
