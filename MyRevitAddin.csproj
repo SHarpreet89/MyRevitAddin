@@ -1,28 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Target .NET 8 for Windows desktop environment -->
+    <!-- Revit 2025 runs on .NET 8 -->
     <TargetFramework>net8.0-windows</TargetFramework>
-
-    <!-- Build a DLL (library) -->
     <OutputType>Library</OutputType>
 
-    <!-- Assembly and namespace names -->
     <AssemblyName>MyRevitAddin</AssemblyName>
     <RootNamespace>MyRevitAddin</RootNamespace>
 
-    <!-- Output folder -->
+    <!-- Release output -->
     <OutputPath>bin\Release\</OutputPath>
 
-    <!-- Ensure correct architecture and behavior -->
+    <!-- 64-bit only -->
     <PlatformTarget>x64</PlatformTarget>
     <LangVersion>latest</LangVersion>
-    <Nullable>disable</Nullable> <!-- You can set 'enable' if you want null-safety -->
+    <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
-  <!-- Revit 2025 API references (must be v25.x DLLs from your install) -->
+  <!-- Revit 2025 API (must be v25.x from your install) -->
   <ItemGroup>
     <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
@@ -34,7 +31,6 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Source files -->
   <ItemGroup>
     <Compile Include="HelloCommand.cs" />
   </ItemGroup>
