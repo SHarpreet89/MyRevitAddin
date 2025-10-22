@@ -19,21 +19,23 @@ jobs:
       - name: Install .NET Framework 4.8 Dev Pack
         run: choco install netfx-4.8-devpack -y
 
-      - name: Download Revit API ZIP from GitHub Release
+      # ⬇️ Download Revit API ZIP from your GitHub Release (public or private)
+      # If private and direct URL ever fails, switch to gh release download with GITHUB_TOKEN.
+      - name: Download and extract Revit API DLLs
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+
           $url = "https://github.com/SHarpreet89/MyRevitAddin/releases/download/v1.0.0/RevitApis.zip"
           Write-Host "📥 Downloading from $url..."
           curl -L -o RevitApis.zip $url
 
-          if (-not (Test-Path RevitApis.zip)) { throw "❌ RevitApis.zip not found." }
           $size = (Get-Item RevitApis.zip).Length
           Write-Host "📏 Downloaded size: $size bytes"
-          if ($size -lt 10000) { throw "❌ Download too small - check release URL or visibility." }
+          if ($size -lt 10000) { throw "❌ Download too small - check release/asset." }
 
           Write-Host "📂 Extracting ZIP..."
-          Expand-Archive -Path RevitApis.zip -DestinationPath . -Force
+          Expand-Archive -Path "RevitApis.zip" -DestinationPath "." -Force
 
           Write-Host "🔍 Searching for RevitAPI DLLs..."
           $dlls = Get-ChildItem -Recurse -Filter "RevitAPI*.dll"
@@ -43,14 +45,17 @@ jobs:
           }
 
           foreach ($dll in $dlls) {
-            Write-Host "➡ Copying $($dll.FullName) to repo root..."
-            Copy-Item $dll.FullName -Destination . -Force
+            $target = Join-Path (Get-Location) ($dll.Name)
+            if ($dll.FullName -ne $target) {
+              Write-Host "➡ Copying $($dll.Name) to repo root..."
+              Copy-Item $dll.FullName -Destination . -Force
+            } else {
+              Write-Host "↪ Skipping $($dll.Name) (already in root)"
+            }
           }
 
-          Write-Host "✅ DLLs successfully staged in root:"
-          Get-ChildItem -Filter "RevitAPI*.dll" | ForEach-Object { $_.FullName }
-
-          Remove-Item RevitApis.zip -Force -ErrorAction SilentlyContinue
+          Write-Host "✅ Final DLLs in root:"
+          Get-ChildItem -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
 
       - name: Build Revit Addin
         run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
