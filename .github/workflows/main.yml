@@ -19,47 +19,38 @@ jobs:
       - name: Install .NET Framework 4.8 Dev Pack
         run: choco install netfx-4.8-devpack -y
 
-      # Use gdown to download from Google Drive (handles confirm token automatically)
-      - name: Install gdown
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip gdown
-
-      - name: Download Revit API ZIP from Google Drive
+      - name: Download Revit API ZIP from GitHub Release
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $fileId = "1aZXAfLbdgVEWBY37_HGlByy8o82swHoi"
-          python -m gdown --id $fileId -O RevitApis.zip
+          $url = "https://github.com/SHarpreet89/MyRevitAddin/releases/download/v1.0.0/RevitApis.zip"
+          Write-Host "📥 Downloading from $url..."
+          curl -L -o RevitApis.zip $url
 
-          # Sanity checks
-          if (-not (Test-Path RevitApis.zip)) { throw "❌ RevitApis.zip not found after gdown." }
+          if (-not (Test-Path RevitApis.zip)) { throw "❌ RevitApis.zip not found." }
           $size = (Get-Item RevitApis.zip).Length
-          Write-Host "📏 Downloaded ZIP size: $size bytes"
-          if ($size -lt 10000) { throw "❌ Downloaded file suspiciously small." }
-
-      - name: Extract and stage Revit API DLLs
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
+          Write-Host "📏 Downloaded size: $size bytes"
+          if ($size -lt 10000) { throw "❌ Download too small - check release URL or visibility." }
 
           Write-Host "📂 Extracting ZIP..."
           Expand-Archive -Path RevitApis.zip -DestinationPath . -Force
 
-          Write-Host "🔍 Searching for RevitAPI*.dll recursively…"
+          Write-Host "🔍 Searching for RevitAPI DLLs..."
           $dlls = Get-ChildItem -Recurse -Filter "RevitAPI*.dll"
           if ($dlls.Count -eq 0) {
-            Get-ChildItem -Recurse | ForEach-Object { $_.FullName }
-            throw "❌ No RevitAPI*.dll found after extraction."
+            Get-ChildItem -Recurse | ForEach-Object { Write-Host $_.FullName }
+            throw "❌ No RevitAPI DLLs found after extraction."
           }
 
           foreach ($dll in $dlls) {
-            Write-Host "➡ Copying $($dll.FullName) to repo root…"
+            Write-Host "➡ Copying $($dll.FullName) to repo root..."
             Copy-Item $dll.FullName -Destination . -Force
           }
 
-          Write-Host "✅ DLLs staged in root:"
+          Write-Host "✅ DLLs successfully staged in root:"
           Get-ChildItem -Filter "RevitAPI*.dll" | ForEach-Object { $_.FullName }
+
+          Remove-Item RevitApis.zip -Force -ErrorAction SilentlyContinue
 
       - name: Build Revit Addin
         run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU"
