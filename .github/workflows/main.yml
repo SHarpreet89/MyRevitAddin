@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $url = "https://github.com/SHarpreet89/MyRevitAddin/releases/download/v1.0.1/RevitApis.zip"
+          $url = "https://github.com/SHarpreet89/MyRevitAddin/releases/download/v1.0.0/RevitApis.zip"
           Write-Host "📥 Downloading from $url..."
           curl -L -o RevitApis.zip $url
 
