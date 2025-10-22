@@ -1,63 +1,42 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- ===== General Build Settings ===== -->
   <PropertyGroup>
-    <!-- Ensure proper configuration and platform -->
-    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <!-- Target .NET 8 for Windows desktop environment -->
+    <TargetFramework>net8.0-windows</TargetFramework>
 
-    <!-- Output library (.dll) -->
+    <!-- Build a DLL (library) -->
     <OutputType>Library</OutputType>
 
-    <!-- Target .NET Framework version (Revit 2025 uses 4.8) -->
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <TargetFrameworkProfile />
-
-    <!-- Output and naming -->
+    <!-- Assembly and namespace names -->
     <AssemblyName>MyRevitAddin</AssemblyName>
     <RootNamespace>MyRevitAddin</RootNamespace>
+
+    <!-- Output folder -->
     <OutputPath>bin\Release\</OutputPath>
 
-    <!-- Ensure proper IL and build -->
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <Prefer32Bit>false</Prefer32Bit>
+    <!-- Ensure correct architecture and behavior -->
     <PlatformTarget>x64</PlatformTarget>
     <LangVersion>latest</LangVersion>
-
-    <!-- Disable SDK-based behavior on GitHub -->
-    <UseMSBuildEngine>MSBuild</UseMSBuildEngine>
+    <Nullable>disable</Nullable> <!-- You can set 'enable' if you want null-safety -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
-  <!-- ===== Assembly References ===== -->
+  <!-- Revit 2025 API references (must be v25.x DLLs from your install) -->
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Windows.Forms" />
-
-    <!-- Revit 2025 API references (place these DLLs in repo root or specify absolute paths) -->
-    <Reference Include="Autodesk.RevitAPI">
+    <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
-    <Reference Include="Autodesk.RevitAPIUI">
+    <Reference Include="RevitAPIUI">
       <HintPath>RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
-  <!-- ===== Source Files ===== -->
+  <!-- Source files -->
   <ItemGroup>
     <Compile Include="HelloCommand.cs" />
   </ItemGroup>
-
-  <!-- ===== Build Rules ===== -->
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-
-  <!-- Optional: ensure old-style build toolchain -->
-  <PropertyGroup>
-    <UseSharedCompilation>false</UseSharedCompilation>
-  </PropertyGroup>
 
 </Project>
