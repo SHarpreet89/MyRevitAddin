@@ -18,39 +18,36 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Download & extract Revit API DLLs (use cache-buster so GitHub doesn't serve stale asset)
-      - name: 📦 Download and extract Revit API DLLs
+      - name: 📦 Download Revit API DLLs via gh
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $url = 'https://github.com/SHarpreet89/MyRevitAddin/releases/download/v1.0.0/RevitApis.zip'
-          $cb  = Get-Random
-          $zip = 'RevitApis.zip'
+          $repo = 'SHarpreet89/MyRevitAddin'
+          $tag  = 'v1.0.0'
+          $asset = 'RevitApis.zip'
 
-          Write-Host "📥 Downloading: $url?cb=$cb"
-          curl -L -o $zip "$url?cb=$cb"
+          Write-Host "📥 Downloading $asset from $repo@$tag ..."
+          gh release download $tag --repo $repo --pattern $asset --dir .
 
-          $size = (Get-Item $zip).Length
-          if ($size -lt 1000000) { throw "❌ ZIP size too small ($size bytes). Wrong asset or corrupted download." }
+          if (-not (Test-Path $asset)) { throw "❌ $asset was not downloaded." }
+
+          $size = (Get-Item $asset).Length
+          if ($size -lt 1000000) { throw "❌ ZIP too small ($size bytes). Wrong asset or corrupted." }
 
           $extractDir = Join-Path $PWD 'revapi'
           if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
           New-Item -ItemType Directory -Path $extractDir | Out-Null
 
-          Write-Host "📂 Extracting to $extractDir"
-          Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+          Expand-Archive -Path $asset -DestinationPath $extractDir -Force
 
-          # Copy DLLs to repo root for the HintPaths
-          $apiUI = Get-ChildItem -Recurse -Path $extractDir -Filter 'RevitAPIUI.dll' | Select-Object -First 1
-          $api   = Get-ChildItem -Recurse -Path $extractDir -Filter 'RevitAPI.dll'    | Select-Object -First 1
+          $api   = Get-ChildItem -Recurse $extractDir -Filter 'RevitAPI.dll'    | Select-Object -First 1
+          $apiUI = Get-ChildItem -Recurse $extractDir -Filter 'RevitAPIUI.dll' | Select-Object -First 1
+          if (-not $api -or -not $apiUI) { throw "❌ RevitAPI.dll and/or RevitAPIUI.dll not found in ZIP." }
 
-          if (-not $api -or -not $apiUI) {
-            Get-ChildItem -Recurse $extractDir | ForEach-Object { Write-Host $_.FullName }
-            throw "❌ RevitAPI.dll and/or RevitAPIUI.dll not found in extracted ZIP."
-          }
-
-          if ((Get-Item $api.FullName).Length -lt 10000000)  { throw "❌ RevitAPI.dll looks too small — wrong version or corrupted." }
-          if ((Get-Item $apiUI.FullName).Length -lt 10000000){ throw "❌ RevitAPIUI.dll looks too small — wrong version or corrupted." }
+          if ((Get-Item $api.FullName).Length -lt 10000000)  { throw "❌ RevitAPI.dll too small." }
+          if ((Get-Item $apiUI.FullName).Length -lt 10000000){ throw "❌ RevitAPIUI.dll too small." }
 
           Copy-Item $api.FullName   -Destination (Join-Path $PWD 'RevitAPI.dll')   -Force
           Copy-Item $apiUI.FullName -Destination (Join-Path $PWD 'RevitAPIUI.dll') -Force
