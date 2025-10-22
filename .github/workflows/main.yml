@@ -1,53 +1,46 @@
-name: Build Revit Addin
+name: Build Revit Addin (.NET 8)
+
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout repository
+      - name: 🧾 Checkout repository
         uses: actions/checkout@v4
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
-      - name: Install .NET Framework 4.8 Dev Pack
-        run: choco install netfx-4.8-devpack -y
-      # ⬇️ Download Revit API ZIP from your GitHub Release (public or private)
-      # If private and direct URL ever fails, switch to gh release download with GITHUB_TOKEN.
-      - name: Download and extract Revit API DLLs
+
+      - name: 🧩 Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # ⬇️ Download and extract Revit API DLLs from release (must be Revit 2025 versions)
+      - name: 📦 Download and extract Revit API DLLs
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $url = "https://github.com/SHarpreet89/MyRevitAddin/releases/download/v1.0.0/RevitApis.zip"
           Write-Host "📥 Downloading from $url..."
           curl -L -o RevitApis.zip $url
+
           $size = (Get-Item RevitApis.zip).Length
-          Write-Host "📏 Downloaded size: $size bytes"
-          if ($size -lt 10000) { throw "❌ Download too small - check release/asset." }
-          Write-Host "📂 Extracting ZIP..."
-          Expand-Archive -Path "RevitApis.zip" -DestinationPath "." -Force
-          Write-Host "🔍 Searching for RevitAPI DLLs..."
-          $dlls = Get-ChildItem -Recurse -Filter "RevitAPI*.dll"
-          if ($dlls.Count -eq 0) {
-            Get-ChildItem -Recurse | ForEach-Object { Write-Host $_.FullName }
-            throw "❌ No RevitAPI DLLs found after extraction."
-          }
-          foreach ($dll in $dlls) {
-            $target = Join-Path (Get-Location) ($dll.Name)
-            if ($dll.FullName -ne $target) {
-              Write-Host "➡ Copying $($dll.Name) to repo root..."
-              Copy-Item $dll.FullName -Destination . -Force
-            } else {
-              Write-Host "↪ Skipping $($dll.Name) (already in root)"
-            }
-          }
-          Write-Host "✅ Final DLLs in root:"
+          if ($size -lt 10000) { throw "❌ Download too small - check release asset" }
+
+          Write-Host "📂 Extracting..."
+          7z x RevitApis.zip -y -o.
+
+          Write-Host "✅ Extracted RevitAPI files:"
           Get-ChildItem -Filter "RevitAPI*.dll" | ForEach-Object { Write-Host $_.FullName }
-      - name: Build Revit Addin (x64)
-        run: msbuild MyRevitAddin.csproj /p:Configuration=Release /p:Platform="Any CPU" /p:PlatformTarget=x64 /p:Prefer32Bit=false
-      - name: Upload build artifact
+
+      - name: 🏗️ Build Revit Addin
+        run: dotnet build MyRevitAddin.csproj --configuration Release
+
+      - name: 📤 Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: MyRevitAddin
-          path: bin\Release\
+          path: bin/Release/net8.0-windows/
