@@ -18,14 +18,15 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # Robust release download using gh (avoids CDN staleness)
       - name: 📦 Download Revit API DLLs via gh
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $repo = 'SHarpreet89/MyRevitAddin'
-          $tag  = 'v1.0.0'
+          $repo  = 'SHarpreet89/MyRevitAddin'
+          $tag   = 'v1.0.0'
           $asset = 'RevitApis.zip'
 
           Write-Host "📥 Downloading $asset from $repo@$tag ..."
@@ -33,27 +34,34 @@ jobs:
 
           if (-not (Test-Path $asset)) { throw "❌ $asset was not downloaded." }
 
-          $size = (Get-Item $asset).Length
-          if ($size -lt 1000000) { throw "❌ ZIP too small ($size bytes). Wrong asset or corrupted." }
-
           $extractDir = Join-Path $PWD 'revapi'
           if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
           New-Item -ItemType Directory -Path $extractDir | Out-Null
 
           Expand-Archive -Path $asset -DestinationPath $extractDir -Force
 
+          # Find both DLLs
           $api   = Get-ChildItem -Recurse $extractDir -Filter 'RevitAPI.dll'    | Select-Object -First 1
           $apiUI = Get-ChildItem -Recurse $extractDir -Filter 'RevitAPIUI.dll' | Select-Object -First 1
-          if (-not $api -or -not $apiUI) { throw "❌ RevitAPI.dll and/or RevitAPIUI.dll not found in ZIP." }
+          if (-not $api -or -not $apiUI) {
+            Get-ChildItem -Recurse $extractDir | ForEach-Object { Write-Host $_.FullName }
+            throw "❌ RevitAPI.dll and/or RevitAPIUI.dll not found in ZIP."
+          }
 
-          if ((Get-Item $api.FullName).Length -lt 10000000)  { throw "❌ RevitAPI.dll too small." }
-          if ((Get-Item $apiUI.FullName).Length -lt 10000000){ throw "❌ RevitAPIUI.dll too small." }
+          # ✅ Validate FILE VERSION (not size). Expect 25.* for Revit 2025.
+          function Get-Ver($p) { ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($p)).FileVersion }
+          $verApi   = Get-Ver $api.FullName
+          $verApiUI = Get-Ver $apiUI.FullName
+          Write-Host "🔎 Versions -> RevitAPI: $verApi | RevitAPIUI: $verApiUI"
 
+          if ($verApi   -notmatch '^25\.' ) { throw "❌ RevitAPI.dll version ($verApi) is not 25.* (wrong year or corrupted)." }
+          if ($verApiUI -notmatch '^25\.' ) { throw "❌ RevitAPIUI.dll version ($verApiUI) is not 25.* (wrong year or corrupted)." }
+
+          # Stage them to repo root for HintPath
           Copy-Item $api.FullName   -Destination (Join-Path $PWD 'RevitAPI.dll')   -Force
           Copy-Item $apiUI.FullName -Destination (Join-Path $PWD 'RevitAPIUI.dll') -Force
 
-          Write-Host "✅ Staged:"
-          Get-Item RevitAPI*.dll | Format-Table Name,Length
+          Write-Host "✅ Staged RevitAPI DLLs in repo root."
 
       - name: 🏗️ Build (Release, net8.0-windows, x64)
         run: dotnet build MyRevitAddin.csproj --configuration Release
