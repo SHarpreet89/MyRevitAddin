@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 🧩 Setup .NET Framework 4.8
+      - name: 🧩 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: 📦 Download Revit API DLLs
@@ -24,19 +24,23 @@ jobs:
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
 
       - name: 🏗️ MSBuild TESTPLUGIN x64
-        run: |
-          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Restore,Build /maxcpucount
+        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Restore,Build /maxcpucount
 
-      - name: 🔍 Verify
+      - name: 🔍 Verify & List Files
         shell: pwsh
         run: |
-          $dll = "bin\x64\Release\TESTPLUGIN.dll"
-          Write-Host "🎯 DLL: $dll"
-          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | ForEach-Object { Write-Host "📁 FOUND: $($_.FullName)" }
+          $dll = "bin\x64\Release\net48\TESTPLUGIN.dll"
+          if (Test-Path $dll) {
+            Write-Host "🎯 DLL: $dll"
+            & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          } else {
+            throw "❌ DLL not found at $dll"
+          }
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
           name: TESTPLUGIN-REVIT2025
-          path: bin/x64/Release/TESTPLUGIN.dll
+          path: bin/x64/Release/net48/TESTPLUGIN.dll
           retention-days: 90
