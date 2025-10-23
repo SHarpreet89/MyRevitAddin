@@ -1,4 +1,4 @@
-name: Build Revit Addin (.NET 8 - Pure x64)
+name: Build Revit Addin (.NET 8 - Pure x64 NO 32BITREQ)
 on:
   workflow_dispatch:
   push:
@@ -8,8 +8,11 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🧩 Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
@@ -18,27 +21,51 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $ErrorActionPreference = 'Stop'
           gh release download v1.0.0 --repo SHarpreet89/MyRevitAddin --pattern RevitApis.zip --dir .
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
-          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
-          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
+          $api = Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1
+          $apiUI = Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1
+          Copy-Item $api.FullName RevitAPI.dll -Force
+          Copy-Item $apiUI.FullName RevitAPIUI.dll -Force
+          Write-Host "✅ Revit API DLLs staged"
 
       - name: 🏗️ dotnet publish Pure x64
+        shell: pwsh
         run: |
-          dotnet publish MyRevitAddin.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o ./publish
+          dotnet restore MyRevitAddin.csproj
+          dotnet publish MyRevitAddin.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o ./publish -v minimal
 
-      - name: 🔍 Verify
+      - name: 🔍 VERIFY CorFlags (MUST BE 32BITREQ: 0)
         shell: pwsh
         run: |
           $dll = "./publish/MyRevitAddin.dll"
-          Write-Host "🎯 DLL: $dll"
-          $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll)
-          Write-Host "   Architecture: $($asm.ProcessorArchitecture)"
-          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          if (-not (Test-Path $dll)) {
+            Get-ChildItem -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "$($_.FullName)" }
+            throw "❌ DLL not found!"
+          }
+          Write-Host "🎯 TARGET DLL: $dll"
+          
+          $bytes = [System.IO.File]::ReadAllBytes($dll)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          Write-Host "🔍 PE Machine: 0x$($machine.ToString('X4'))"
+          
+          $corflagsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
+          $corflagsOutput = & $corflagsPath $dll
+          Write-Host "🔍 CorFlags:"
+          $corflagsOutput | ForEach-Object { Write-Host "   $_" }
+          
+          $outputText = $corflagsOutput -join " "
+          if ($outputText -match "PE32\+" -and $outputText -match "32BITREQ\s*:\s*0" -and $outputText -match "ILONLY\s*:\s*1") {
+            Write-Host "🎉 REVIT 2025 PERFECT: PE32+ ILONLY 32BITREQ=0 ✅✅✅"
+          } else {
+            throw "❌ WRONG FLAGS! 32BITREQ must be 0 for Revit 2025!"
+          }
 
-      - name: 📤 Upload
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MyRevitAddin-REVIT2025
+          name: MyRevitAddin-REVIT2025-CORRECT
           path: ./publish/MyRevitAddin.dll
           retention-days: 90
