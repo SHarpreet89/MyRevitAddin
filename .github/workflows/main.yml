@@ -1,4 +1,4 @@
-name: Build TESTPLUGIN (.NET 4.8 - RevitLookup Style)
+name: Build TESTPLUGIN (.NET 4.8 - Pure x64)
 on:
   workflow_dispatch:
   push:
@@ -24,20 +24,19 @@ jobs:
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
 
       - name: 🏗️ MSBuild TESTPLUGIN x64
-        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Build /p:OutputPath=bin\x64\Release\ /maxcpucount /v:minimal
+        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform="x64" /maxcpucount
 
       - name: 🔍 Verify
         shell: pwsh
         run: |
           Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | ForEach-Object { Write-Host "📁 FOUND: $($_.FullName)" }
-          $dll = "bin\x64\Release\TESTPLUGIN.dll"
-          if (Test-Path $dll) {
-            & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
-          }
+          $dll = (Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1).FullName
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
           name: TESTPLUGIN-REVIT2025-FINAL
-          path: bin/x64/Release/TESTPLUGIN.dll
+          path: |
+            **/TESTPLUGIN.dll
           retention-days: 90
