@@ -61,10 +61,10 @@ jobs:
           Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
           Write-Host "1️⃣ CORFLAGS CHECK (32-bit vs 64-bit)" -ForegroundColor Cyan
           Write-Host "─"*50 -ForegroundColor DarkGray
-          $corflags = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll.FullName
+          $corflags = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll.FullName | Out-String
           Write-Host $corflags
           
-          # Extract key values
+          # Extract key values with null checks
           $pe = if ($corflags -match "PE\s*:\s*(\S+)") { $matches[1] } else { "UNKNOWN" }
           $ilonly = if ($corflags -match "ILONLY\s*:\s*(\d+)") { $matches[1] } else { "UNKNOWN" }
           $req32bit = if ($corflags -match "32BITREQ\s*:\s*(\d+)") { $matches[1] } else { "UNKNOWN" }
