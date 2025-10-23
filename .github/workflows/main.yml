@@ -1,4 +1,5 @@
-name: Build Revit Addin (.NET 8 - Pure x64)
+name: Build Revit Addin (.NET 8 - TESTPLUGIN Pure x64)
+
 on:
   workflow_dispatch:
   push:
@@ -25,20 +26,21 @@ jobs:
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
 
       - name: 🏗️ dotnet publish Pure x64
-        run: dotnet publish MyRevitAddin.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o ./publish
+        run: dotnet publish TESTPLUGIN.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o ./publish
 
-      - name: 🔍 Verify
+      - name: 🔍 Verify architecture
         shell: pwsh
         run: |
-          $dll = "./publish/MyRevitAddin.dll"
+          $dll = "./publish/TESTPLUGIN.dll"
           Write-Host "🎯 DLL: $dll"
           $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll)
           Write-Host "Architecture: $($asm.ProcessorArchitecture)"
-          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\corflags.exe" $dll
+          Write-Host "✅ Verification complete — expecting PE32+ and 32BITREQ=0"
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
-          name: MyRevitAddin-REVIT2025
-          path: ./publish/MyRevitAddin.dll
+          name: TESTPLUGIN-REVIT2025
+          path: ./publish/TESTPLUGIN.dll
           retention-days: 90
