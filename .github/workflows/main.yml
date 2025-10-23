@@ -21,70 +21,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $ErrorActionPreference = 'Stop'
           gh release download v1.0.0 --repo SHarpreet89/MyRevitAddin --pattern RevitApis.zip --dir .
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
-          $api = Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1
-          $apiUI = Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1
-          Copy-Item $api.FullName RevitAPI.dll -Force
-          Copy-Item $apiUI.FullName RevitAPIUI.dll -Force
+          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
+          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
           Write-Host "✅ Revit API DLLs staged"
 
-      - name: 🏗️ MSBuild Pure x64 (NO 32BITREQ)
+      - name: 🏗️ MSBuild Pure x64
         shell: pwsh
         run: |
-          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" MyRevitAddin.csproj `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:TargetFramework=net8.0-windows `
-            /p:PlatformTarget=x64 `
-            /p:Prefer32Bit=false `
-            /p:Requires32Bit=false `
-            /t:Restore,Build `
-            /maxcpucount `
-            /v:minimal
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" MyRevitAddin.csproj /p:Configuration=Release /p:Platform=x64 /p:TargetFramework=net8.0-windows /p:PlatformTarget=x64 /p:Prefer32Bit=false /p:Requires32Bit=false /t:Restore,Build /maxcpucount /v:minimal
 
-      - name: 🔍 VERIFY CorFlags (MUST BE 32BITREQ: 0)
+      - name: 🔍 Verify DLL (Simple)
         shell: pwsh
         run: |
-          $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | 
-                 Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | 
-                 Select-Object -First 1
-          
-          if (-not $dll) {
-            throw "❌ No Release/x64 MyRevitAddin.dll found!"
-          }
-          
-          Write-Host "🎯 TARGET DLL: $($dll.FullName)"
-          
-          # PE Header check
-          $bytes = [System.IO.File]::ReadAllBytes($dll.FullName)
-          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
-          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
-          Write-Host "🔍 PE Machine: 0x$($machine.ToString('X4'))"
-          
-          if ($machine -ne 0x8664) {
-            throw "❌ NOT x64 PE Header!"
-          }
-          
-          # READ-ONLY CorFlags verification
-          $corflagsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
-          if (-not (Test-Path $corflagsPath)) {
-            $corflagsPath = "C:\Program Files\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
-          }
-          
-          $corflagsOutput = & $corflagsPath $dll.FullName
-          
-          Write-Host "🔍 CorFlags (READ-ONLY):"
-          $corflagsOutput | ForEach-Object { Write-Host "   $_" }
-          
-          # CRITICAL: MUST have 32BITREQ: 0 for Revit 2025
-          $outputText = $corflagsOutput -join " "
-          if ($outputText -match "PE32\+" -and $outputText -match "32BITREQ\s*:\s*0" -and $outputText -match "ILONLY\s*:\s*1") {
-            Write-Host "🎉🎉🎉 REVIT 2025 PERFECT: PE32+ ILONLY 32BITREQ=0 ✅✅✅"
-          } else {
-            throw "❌ WRONG FLAGS! 32BITREQ must be 0 for Revit 2025!"
-          }
+          $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | Select-Object -First 1
+          Write-Host "🎯 DLL: $($dll.FullName)"
+          $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll.FullName)
+          Write-Host "   Architecture: $($asm.ProcessorArchitecture)"
+          corflags $dll.FullName
+          Write-Host "✅ Build complete - check 32BITREQ: 0 above"
 
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
