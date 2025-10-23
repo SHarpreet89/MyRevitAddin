@@ -1,165 +1,60 @@
-name: Build TESTPLUGIN (.NET 4.8 - FULL DIAGNOSTICS)
+name: Build TESTPLUGIN
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       
-      - name: 🧩 Setup MSBuild
+      - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
       
-      - name: 📦 Download Revit API DLLs
+      - name: Download Revit APIs
         shell: pwsh
         run: |
           gh release download v1.0.0 --repo SHarpreet89/MyRevitAddin --pattern RevitApis.zip --dir .
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
-          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
-          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
+          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll
+          Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: 🏗️ MSBuild TESTPLUGIN x64
-        run: |
-          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /maxcpucount /v:normal
+      - name: Build
+        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /v:minimal
       
-      - name: 🔬 DEEP DIAGNOSTICS - All DLL Metadata
+      - name: Diagnostics
         shell: pwsh
         run: |
-          Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-          Write-Host "🔍 CRITICAL DIAGNOSTICS FOR LINE 146 CRASH" -ForegroundColor Yellow
-          Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+          $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select -First 1
+          Write-Host "DLL: $($dll.FullName)"
           
-          $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1
-          
-          if (-not $dll) {
-            Write-Host "❌ TESTPLUGIN.dll NOT FOUND!" -ForegroundColor Red
-            exit 1
-          }
-          
-          Write-Host "`n📁 DLL Location: $($dll.FullName)" -ForegroundColor Green
-          Write-Host "📊 File Size: $([math]::Round($dll.Length/1KB, 2)) KB" -ForegroundColor Green
-          Write-Host "📅 Created: $($dll.CreationTime)" -ForegroundColor Green
-          
-          # Find dumpbin.exe dynamically
-          Write-Host "`n🔍 Locating dumpbin.exe..." -ForegroundColor Cyan
-          $dumpbinPaths = @(
-            "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe",
-            "C:\Program Files (x86)\Microsoft Visual Studio\*\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe"
-          )
-          $dumpbin = Get-ChildItem -Path $dumpbinPaths -ErrorAction SilentlyContinue | Select-Object -First 1
-          
-          if ($dumpbin) {
-            Write-Host "✅ Found: $($dumpbin.FullName)" -ForegroundColor Green
-          } else {
-            Write-Host "⚠️ dumpbin.exe not found - skipping native dependency check" -ForegroundColor Yellow
-          }
-          
-          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-          Write-Host "1️⃣ CORFLAGS CHECK (32-bit vs 64-bit)" -ForegroundColor Cyan
-          Write-Host "─"*50 -ForegroundColor DarkGray
           $corflags = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll.FullName | Out-String
           Write-Host $corflags
           
-          # Extract key values with null checks
-          $pe = if ($corflags -match "PE\s*:\s*(\S+)") { $matches[1] } else { "UNKNOWN" }
-          $ilonly = if ($corflags -match "ILONLY\s*:\s*(\d+)") { $matches[1] } else { "UNKNOWN" }
-          $req32bit = if ($corflags -match "32BITREQ\s*:\s*(\d+)") { $matches[1] } else { "UNKNOWN" }
+          $ildasm = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\ildasm.exe" /text /nobar $dll.FullName | Out-String
+          $version = $ildasm -split "`n" | Where-Object { $_ -match "\.ver\s+\d+:\d+:\d+:\d+" } | Select -First 1
+          Write-Host "Assembly Version: $version"
           
-          Write-Host "`n🎯 QUICK CHECK:" -ForegroundColor Yellow
-          if ($pe -eq "PE32+" -and $ilonly -eq "1" -and $req32bit -eq "0") {
-            Write-Host "   ✅ DLL is correctly configured for Revit 2025 x64!" -ForegroundColor Green
+          if ($version -match "\.ver\s+1:0:0:0") {
+            Write-Host "✅ Version 1.0.0.0 CORRECT!" -ForegroundColor Green
           } else {
-            Write-Host "   ❌ DLL has wrong flags for Revit 2025!" -ForegroundColor Red
-            Write-Host "   Expected: PE32+, ILONLY=1, 32BITREQ=0" -ForegroundColor Yellow
-            Write-Host "   Got: $pe, ILONLY=$ilonly, 32BITREQ=$req32bit" -ForegroundColor Red
+            Write-Host "❌ Version NOT 1.0.0.0!" -ForegroundColor Red
           }
-          
-          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-          Write-Host "2️⃣ ASSEMBLY VERSION (via ILDASM)" -ForegroundColor Cyan
-          Write-Host "─"*50 -ForegroundColor DarkGray
-          $ildasm = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\ildasm.exe" /text /nobar $dll.FullName
-          $versionLine = $ildasm | Select-String -Pattern "\.ver\s+\d+:\d+:\d+:\d+" | Select-Object -First 1
-          if ($versionLine) {
-            Write-Host $versionLine -ForegroundColor Green
-            if ($versionLine -match "\.ver\s+1:0:0:0") {
-              Write-Host "✅ Assembly Version is 1.0.0.0 (CORRECT for Revit!)" -ForegroundColor Green
-            } else {
-              Write-Host "⚠️ Assembly Version is NOT 1.0.0.0 (may cause Line 146 crash!)" -ForegroundColor Red
-            }
-          } else {
-            Write-Host "⚠️ Could not extract version from IL" -ForegroundColor Yellow
-          }
-          
-          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-          Write-Host "3️⃣ REFERENCED ASSEMBLIES" -ForegroundColor Cyan
-          Write-Host "─"*50 -ForegroundColor DarkGray
-          $refs = $ildasm | Select-String -Pattern "\.assembly extern.*" | Select-Object -First 10
-          $refs | ForEach-Object { Write-Host $_ }
-          
-          if ($dumpbin) {
-            Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-            Write-Host "4️⃣ DUMPBIN - PE HEADERS" -ForegroundColor Cyan
-            Write-Host "─"*50 -ForegroundColor DarkGray
-            $headers = & $dumpbin.FullName /headers $dll.FullName | Select-String -Pattern "(machine|magic|subsystem)"
-            $headers | ForEach-Object { Write-Host $_ }
-            
-            Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-            Write-Host "5️⃣ DUMPBIN - NATIVE DEPENDENCIES (Mixed Mode Check)" -ForegroundColor Cyan
-            Write-Host "─"*50 -ForegroundColor DarkGray
-            $deps = & $dumpbin.FullName /dependents $dll.FullName
-            Write-Host $deps
-            
-            if ($deps -match "msvcr|msvcp|vcruntime") {
-              Write-Host "`n❌ MIXED MODE DETECTED - C++ Runtime Dependencies Found!" -ForegroundColor Red
-              Write-Host "   This WILL cause Line 146 crash in Revit!" -ForegroundColor Red
-            } else {
-              Write-Host "`n✅ Pure Managed Assembly - No Native Dependencies" -ForegroundColor Green
-            }
-          }
-          
-          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-          Write-Host "6️⃣ STRONG NAME CHECK" -ForegroundColor Cyan
-          Write-Host "─"*50 -ForegroundColor DarkGray
-          $sn = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\sn.exe" -vf $dll.FullName 2>&1
-          Write-Host $sn
-          
-          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-          Write-Host "7️⃣ IL CODE - Execute Method Check" -ForegroundColor Cyan
-          Write-Host "─"*50 -ForegroundColor DarkGray
-          $executeMethods = $ildasm | Select-String -Pattern "\.method.*Execute" | Select-Object -First 5
-          if ($executeMethods) {
-            Write-Host "✅ Found Execute method:" -ForegroundColor Green
-            $executeMethods | ForEach-Object { Write-Host $_ }
-          } else {
-            Write-Host "❌ No Execute method found!" -ForegroundColor Red
-          }
-          
-          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
-          Write-Host "8️⃣ COMPARISON WITH REVIT API" -ForegroundColor Cyan
-          Write-Host "─"*50 -ForegroundColor DarkGray
-          Write-Host "RevitAPI.dll flags:"
-          $revitCorflags = & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" RevitAPI.dll 2>&1
-          $revitCorflags | Select-String -Pattern "(PE|ILONLY|32BIT)" | ForEach-Object { Write-Host $_ }
-          
-          Write-Host "`n" + "═"*50 -ForegroundColor Cyan
-          Write-Host "✅ DIAGNOSTICS COMPLETE" -ForegroundColor Green
-          Write-Host "═"*50 -ForegroundColor Cyan
-          Write-Host "`n📋 KEY FINDINGS FOR LINE 146 CRASH:" -ForegroundColor Yellow
-          Write-Host "   PE Type: $pe (must be PE32+)" -ForegroundColor White
-          Write-Host "   ILONLY: $ilonly (must be 1)" -ForegroundColor White
-          Write-Host "   32BITREQ: $req32bit (must be 0)" -ForegroundColor White
-          Write-Host "`n🎯 Next: Check journal.txt for Assembly Version line!" -ForegroundColor Cyan
-          Write-Host "`n"
       
-      - name: 📤 Upload DLL + Diagnostic Report
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TESTPLUGIN-REVIT2025-DIAGNOSTICS
+          name: TESTPLUGIN-${{ github.sha }}
           path: |
-            **/TESTPLUGIN.dll
-            **/TESTPLUGIN.pdb
-          retention-days: 90
+            bin/x64/Release/TESTPLUGIN.dll
+            bin/x64/Release/TESTPLUGIN.pdb
+            TESTPLUGIN.addin
+      
+      - name: Show Download Link
+        run: |
+          echo "✅ BUILD COMPLETE!"
+          echo "📦 Download artifact from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
