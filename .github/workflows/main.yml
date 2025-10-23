@@ -1,5 +1,4 @@
-name: Build Revit Addin (.NET 8 - TESTPLUGIN Pure x64)
-
+name: Build TESTPLUGIN (.NET 4.8 - Pure x64)
 on:
   workflow_dispatch:
   push:
@@ -11,9 +10,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+      - name: 🧩 Setup .NET Framework 4.8
+        uses: microsoft/setup-msbuild@v2
 
       - name: 📦 Download Revit API DLLs
         shell: pwsh
@@ -25,22 +23,20 @@ jobs:
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
 
-      - name: 🏗️ dotnet publish Pure x64
-        run: dotnet publish TESTPLUGIN.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o ./publish
+      - name: 🏗️ MSBuild TESTPLUGIN x64
+        run: |
+          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Restore,Build /maxcpucount
 
-      - name: 🔍 Verify architecture
+      - name: 🔍 Verify
         shell: pwsh
         run: |
-          $dll = "./publish/TESTPLUGIN.dll"
+          $dll = "bin\x64\Release\TESTPLUGIN.dll"
           Write-Host "🎯 DLL: $dll"
-          $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll)
-          Write-Host "Architecture: $($asm.ProcessorArchitecture)"
-          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\corflags.exe" $dll
-          Write-Host "✅ Verification complete — expecting PE32+ and 32BITREQ=0"
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
           name: TESTPLUGIN-REVIT2025
-          path: ./publish/TESTPLUGIN.dll
+          path: bin/x64/Release/TESTPLUGIN.dll
           retention-days: 90
