@@ -82,14 +82,17 @@ jobs:
       - name: 🔍 Inspect compiled DLL
         shell: pwsh
         run: |
-          $dll = "bin/Release/net8.0-windows/MyRevitAddin.dll"
-          Write-Host "Framework info from assembly:"
+          $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | Select-Object -First 1
+          if (-not $dll) {
+            throw "❌ MyRevitAddin.dll not found in any build folder!"
+          }
+          Write-Host "Inspecting: $($dll.FullName)"
           try {
-            $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll)
+            $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll.FullName)
             Write-Host " - Name: $($asm.Name)"
             Write-Host " - Version: $($asm.Version)"
             Write-Host " - ProcessorArchitecture: $($asm.ProcessorArchitecture)"
-            $size = (Get-Item $dll).Length
+            $size = (Get-Item $dll.FullName).Length
             Write-Host " - File size: $size bytes"
             if ($asm.ProcessorArchitecture -ne "Amd64") {
               throw "❌ Build produced non-x64 IL (was $($asm.ProcessorArchitecture)). Revit requires Amd64."
