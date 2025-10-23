@@ -24,12 +24,15 @@ jobs:
         run: |
           $runtimes = dotnet --list-runtimes
           Write-Host "Installed runtimes:`n$runtimes"
-          if ($runtimes -notmatch "Microsoft\.WindowsDesktop\.App\s+8\.0") {
-            throw "❌ Missing WindowsDesktop.App — Revit add-ins need net8.0-windows SDK!"
-          } else {
+      
+          # Normalize whitespace (in case everything is printed on one line)
+          $normalized = ($runtimes -replace '\s+', ' ')
+      
+          if ($normalized -match 'Microsoft\.WindowsDesktop\.App\s*8\.0') {
             Write-Host "✅ WindowsDesktop.App 8.0 runtime detected."
+          } else {
+            throw "❌ Missing WindowsDesktop.App — Revit add-ins need net8.0-windows SDK!"
           }
-
 
       # 📦 Download Revit API DLLs via gh (robust method)
       - name: 📦 Download Revit API DLLs via gh
