@@ -42,7 +42,7 @@ jobs:
             /maxcpucount `
             /v:minimal
 
-      - name: 🔧 Force 32BITREQ + Verify
+      - name: 🔧 Force 32BITREQ + Verify (FIXED)
         shell: pwsh
         run: |
           # Find the Release/x64 DLL
@@ -68,25 +68,31 @@ jobs:
             throw "❌ NOT x64 PE Header! Got: 0x$($machine.ToString('X4'))"
           }
           
-          # 2. Force 32BITREQ flag
-          Write-Host "🔧 Setting 32BITREQ flag..."
-          & corflags $dll.FullName /32BITREQ+ /nologo
+          # 2. Force 32BITREQ flag (FULL PATH to corflags)
+          $corflagsPath = "C:\Program Files\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
+          if (-not (Test-Path $corflagsPath)) {
+            $corflagsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
+          }
+          
+          Write-Host "🔧 Setting 32BITREQ flag with: $corflagsPath"
+          & $corflagsPath $dll.FullName /32BITREQ+ /nologo
           
           # 3. Verify final state
-          $corflags = & corflags $dll.FullName
+          $corflagsOutput = & $corflagsPath $dll.FullName
           Write-Host "🔍 FINAL CorFlags:"
-          $corflags | ForEach-Object { Write-Host "   $_" }
+          $corflagsOutput | ForEach-Object { Write-Host "   $_" }
           
-          if ($corflags -match "32BITREQ\s+:\s+0x1" -and $corflags -match "PE\s+:\s+PE32\+") {
+          if ($corflagsOutput -match "32BITREQ\s+:\s+0x1" -and $corflagsOutput -match "PE\s+:\s+PE32\+") {
             Write-Host "🎉🎉🎉 REVIT 2025 READY: Pure x64 DLL ✅✅✅"
           } else {
             throw "❌ CorFlags verification failed!"
           }
 
-      - name: 📤 Upload ALL build outputs
+      - name: 📤 Upload DOWNLOADABLE Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MyRevitAddin-pure-x64
           path: |
-            bin/**
-            publish/**
+            bin/x64/Release/net8.0-windows/MyRevitAddin.dll
+            bin/Release/**/MyRevitAddin.dll
+          retention-days: 30
