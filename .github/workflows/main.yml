@@ -16,7 +16,7 @@ jobs:
       - name: 📦 Download Revit API DLLs
         shell: pwsh
         run: |
-          gh release download v1.0.0 --repo SHarpreet89/MyRevitAddin --pattern RevitApis.zip --dir .
+          gh release download v1.0.0 --repo SHarpreet89/XYZ --pattern RevitApis.zip --dir .
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
