@@ -18,7 +18,17 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Robust release download using gh (avoids CDN staleness)
+      # 🧠 Verify .NET Windows Desktop runtime
+      - name: 🧠 Verify .NET Windows Desktop runtime
+        shell: pwsh
+        run: |
+          $runtimes = dotnet --list-runtimes
+          Write-Host "Installed runtimes:`n$runtimes"
+          if ($runtimes -notmatch "Microsoft.WindowsDesktop.App 8.0") {
+            throw "❌ Missing WindowsDesktop.App — Revit add-ins need net8.0-windows SDK!"
+          }
+
+      # 📦 Download Revit API DLLs via gh (robust method)
       - name: 📦 Download Revit API DLLs via gh
         shell: pwsh
         env:
