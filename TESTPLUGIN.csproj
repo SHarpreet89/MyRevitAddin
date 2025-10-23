@@ -1,8 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
-    <ProjectGuid>{356CDA5A-E6C5-4C2F-A9EF-B3222116B8C8}</ProjectGuid>
+    <ProjectGuid>{12345678-1234-1234-1234-123456789ABC}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>TESTPLUGIN</RootNamespace>
     <AssemblyName>TESTPLUGIN</AssemblyName>
@@ -10,19 +11,20 @@
     <FileAlignment>512</FileAlignment>
     <PlatformTarget>x64</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
   
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
     <DebugType>pdbonly</DebugType>
-    <DebugSymbols>true</DebugSymbols>
     <Optimize>true</Optimize>
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
     <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
       <Private>False</Private>
@@ -31,12 +33,6 @@
       <HintPath>RevitAPIUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
   </ItemGroup>
 
   <ItemGroup>
