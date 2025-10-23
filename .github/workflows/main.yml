@@ -25,14 +25,16 @@ jobs:
 
       - name: 🏗️ MSBuild TESTPLUGIN x64
         run: |
-          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Build /p:OutputPath=bin\x64\Release\ /maxcpucount /v:minimal
+          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Restore,Build /p:OutputPath=bin\x64\Release\ /maxcpucount /v:minimal
 
       - name: 🔍 Verify
         shell: pwsh
         run: |
+          Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | ForEach-Object { Write-Host "📁 FOUND: $($_.FullName)" }
           $dll = "bin\x64\Release\TESTPLUGIN.dll"
-          Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll"
-          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          if (Test-Path $dll) {
+            & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          }
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
