@@ -11,7 +11,7 @@ using Autodesk.Revit.UI;
 [assembly: AssemblyFileVersion("1.0.0.0")]
 [assembly: ComVisible(false)]
 
-namespace MyRevitAddin
+namespace XYZ
 {
     [Transaction(TransactionMode.Manual)]
     public class HelloCommand : IExternalCommand
@@ -23,3 +23,4 @@ namespace MyRevitAddin
         }
     }
 }
+
