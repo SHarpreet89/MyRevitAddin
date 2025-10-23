@@ -4,12 +4,10 @@
     <OutputType>Library</OutputType>
     <AssemblyName>MyRevitAddin</AssemblyName>
     <RootNamespace>MyRevitAddin</RootNamespace>
-    
-    <!-- CRITICAL: Pure x64, NO 32-bit flags -->
     <PlatformTarget>x64</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
-    <Requires32Bit>false</Requires32Bit>
-    
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
   </PropertyGroup>
@@ -17,11 +15,11 @@
   <ItemGroup>
     <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
-      <Private>False</Private>
+      <Private>false</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
       <HintPath>RevitAPIUI.dll</HintPath>
-      <Private>False</Private>
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
 </Project>
