@@ -43,28 +43,41 @@ jobs:
             /t:Restore,Build `
             /maxcpucount
 
-      - name: 🔧 Force 32BITREQ Flag (Revit Requirement)
-        shell: pwsh
-        run: |
-          $dll = "bin\x64\Release\net8.0-windows\MyRevitAddin.dll"
-          if (-not (Test-Path $dll)) {
-            Get-ChildItem -Recurse bin -Name "*.dll" | ForEach-Object { Write-Host "Found: $_" }
-            throw "❌ DLL not found at expected path"
-          }
-          
-          # FORCE 32BITREQ flag using corflags
-          & corflags $dll /32BITREQ+ /nologo
-          
-          # Verify
-          $corflags = & corflags $dll
-          Write-Host "🔍 FINAL CorFlags:"
-          $corflags | ForEach-Object { Write-Host "   $_" }
-          
-          if ($corflags -match "32BITREQ\s+:\s+0x1") {
-            Write-Host "✅✅✅ 32BITREQ SET - Revit 2025 READY ✅✅✅"
-          } else {
-            throw "❌ 32BITREQ FAILED"
-          }
+            - name: 🔧 Force 32BITREQ Flag (Revit Requirement)
+              shell: pwsh
+              run: |
+                # Find DLL dynamically (handles any folder structure)
+                $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | Select-Object -First 1
+                
+                if (-not $dll) {
+                  Write-Host "❌ Searching all DLLs:"
+                  Get-ChildItem -Recurse -Name "*.dll" | ForEach-Object { Write-Host "Found: $_" }
+                  throw "❌ MyRevitAddin.dll not found in Release/x64 folders!"
+                }
+                
+                Write-Host "🔍 Found DLL: $($dll.FullName)"
+                
+                # FORCE 32BITREQ flag using corflags
+                & corflags $dll.FullName /32BITREQ+ /nologo
+                
+                # Verify the fix
+                $corflags = & corflags $dll.FullName
+                Write-Host "🔍 FINAL CorFlags:"
+                $corflags | ForEach-Object { Write-Host "   $_" }
+                
+                if ($corflags -match "32BITREQ\s+:\s+0x1") {
+                  Write-Host "✅✅✅ 32BITREQ SET - Revit 2025 READY ✅✅✅"
+                } else {
+                  throw "❌ 32BITREQ flag NOT set!"
+                }
+
+      - name: 📤 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyRevitAddin-pure-x64
+          path: |
+            bin/x64/Release/**
+            bin/Release/**
 
       - name: 📤 Upload artifact
         uses: actions/upload-artifact@v4
