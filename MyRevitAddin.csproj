@@ -1,35 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <!-- Revit 2025 runs on .NET 8 -->
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>Library</OutputType>
-
-    <!-- Force x64 build -->
+    <AssemblyName>MyRevitAddin</AssemblyName>
+    <RootNamespace>MyRevitAddin</RootNamespace>
+    
+    <!-- Let MSBuild handle platform -->
     <PlatformTarget>x64</PlatformTarget>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>false</SelfContained>
-    <Prefer32Bit>false</Prefer32Bit>
-
-    <UseWindowsForms>true</UseWindowsForms>
+    
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <LangVersion>latest</LangVersion>
-
-    <!-- Simplify output path -->
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <BaseOutputPath>bin\Release\</BaseOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
-      <Private>false</Private>
+      <Private>False</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
       <HintPath>RevitAPIUI.dll</HintPath>
-      <Private>false</Private>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
-
 </Project>
