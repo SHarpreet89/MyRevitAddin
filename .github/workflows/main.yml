@@ -1,4 +1,4 @@
-name: Build Revit Addin (.NET 8 - Pure x64)
+name: Build Revit Addin (.NET 8 - Pure x64 NO 32BITREQ)
 on:
   workflow_dispatch:
   push:
@@ -30,7 +30,7 @@ jobs:
           Copy-Item $apiUI.FullName RevitAPIUI.dll -Force
           Write-Host "✅ Revit API DLLs staged"
 
-      - name: 🏗️ MSBuild Pure x64
+      - name: 🏗️ MSBuild Pure x64 (NO 32BITREQ)
         shell: pwsh
         run: |
           & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" MyRevitAddin.csproj `
@@ -38,23 +38,18 @@ jobs:
             /p:Platform=x64 `
             /p:TargetFramework=net8.0-windows `
             /p:PlatformTarget=x64 `
+            /p:Prefer32Bit=false `
+            /p:Requires32Bit=false `
             /t:Restore,Build `
             /maxcpucount `
             /v:minimal
 
-      - name: 🔧 Force 32BITREQ + Verify (FINAL FIX)
+      - name: 🔍 VERIFY CorFlags (MUST BE 32BITREQ: 0)
         shell: pwsh
         run: |
-          # Find the Release/x64 DLL
           $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | 
                  Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | 
                  Select-Object -First 1
-          
-          if (-not $dll) {
-            Write-Host "❌ All DLLs found:"
-            Get-ChildItem -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "$($_.DirectoryName)\$($_.Name)" }
-            throw "❌ No Release/x64 MyRevitAddin.dll found!"
-          }
           
           Write-Host "🎯 TARGET DLL: $($dll.FullName)"
           
@@ -65,36 +60,28 @@ jobs:
           Write-Host "🔍 PE Machine: 0x$($machine.ToString('X4'))"
           
           if ($machine -ne 0x8664) {
-            throw "❌ NOT x64 PE Header! Got: 0x$($machine.ToString('X4'))"
+            throw "❌ NOT x64 PE Header!"
           }
           
-          # Force 32BITREQ
+          # READ-ONLY CorFlags verification
           $corflagsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
-          if (-not (Test-Path $corflagsPath)) {
-            $corflagsPath = "C:\Program Files\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
-          }
-          
-          Write-Host "🔧 Setting 32BITREQ flag with: $corflagsPath"
-          & $corflagsPath $dll.FullName /32BITREQ+ /nologo
-          
-          # Verify (ignore header, check key flags)
           $corflagsOutput = & $corflagsPath $dll.FullName
-          Write-Host "🔍 FINAL CorFlags:"
+          
+          Write-Host "🔍 CorFlags (READ-ONLY):"
           $corflagsOutput | ForEach-Object { Write-Host "   $_" }
           
-          # FIXED: Check for the actual flags (ignore header text)
+          # CRITICAL: MUST have 32BITREQ: 0 for Revit 2025
           $outputText = $corflagsOutput -join " "
-          if ($outputText -match "PE32\+" -and $outputText -match "32BITREQ\s*:\s*1") {
-            Write-Host "🎉🎉🎉 REVIT 2025 READY: Pure x64 DLL ✅✅✅"
-            Write-Host "🚀 DOWNLOAD & DEPLOY NOW!"
+          if ($outputText -match "PE32\+" -and $outputText -match "32BITREQ\s*:\s*0" -and $outputText -match "ILONLY\s*:\s*1") {
+            Write-Host "🎉🎉🎉 REVIT 2025 PERFECT: PE32+ ILONLY 32BITREQ=0 ✅✅✅"
           } else {
-            throw "❌ Missing required flags!"
+            throw "❌ WRONG FLAGS! 32BITREQ must be 0 for Revit 2025!"
           }
 
-      - name: 📤 Upload DOWNLOADABLE Artifact
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MyRevitAddin-pure-x64-REVIT2025
+          name: MyRevitAddin-REVIT2025-CORRECT
           path: |
             bin/x64/Release/net8.0-windows/MyRevitAddin.dll
           retention-days: 90
