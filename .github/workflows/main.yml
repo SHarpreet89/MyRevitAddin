@@ -24,8 +24,7 @@ jobs:
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
 
       - name: 🏗️ MSBuild TESTPLUGIN x64
-        run: |
-          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Restore,Build /p:OutputPath=bin\x64\Release\ /maxcpucount /v:minimal
+        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /t:Build /p:OutputPath=bin\x64\Release\ /maxcpucount /v:minimal
 
       - name: 🔍 Verify
         shell: pwsh
