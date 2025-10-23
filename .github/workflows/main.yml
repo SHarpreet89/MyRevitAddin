@@ -1,4 +1,4 @@
-name: Build TESTPLUGIN (.NET 4.8 - Pure x64)
+name: Build TESTPLUGIN (.NET 4.8 - FINAL)
 on:
   workflow_dispatch:
   push:
@@ -24,14 +24,16 @@ jobs:
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
 
       - name: 🏗️ MSBuild TESTPLUGIN x64
-        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform="x64" /maxcpucount
+        run: |
+          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /maxcpucount /v:normal
 
-      - name: 🔍 Verify
+      - name: 🔍 List & Verify
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | ForEach-Object { Write-Host "📁 FOUND: $($_.FullName)" }
-          $dll = (Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1).FullName
-          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
+          Get-ChildItem -Recurse -Name "*.dll" -Filter "*TESTPLUGIN*" | ForEach-Object { Write-Host "📁 $_" }
+          $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1
+          Write-Host "🎯 FULL PATH: $($dll.FullName)"
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll.FullName
 
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
