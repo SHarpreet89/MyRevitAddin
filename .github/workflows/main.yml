@@ -42,7 +42,7 @@ jobs:
             /maxcpucount `
             /v:minimal
 
-      - name: 🔧 Force 32BITREQ + Verify (FIXED)
+      - name: 🔧 Force 32BITREQ + Verify (FINAL FIX)
         shell: pwsh
         run: |
           # Find the Release/x64 DLL
@@ -58,7 +58,7 @@ jobs:
           
           Write-Host "🎯 TARGET DLL: $($dll.FullName)"
           
-          # 1. Check PE Header (must be x64)
+          # PE Header check
           $bytes = [System.IO.File]::ReadAllBytes($dll.FullName)
           $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
           $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
@@ -68,31 +68,33 @@ jobs:
             throw "❌ NOT x64 PE Header! Got: 0x$($machine.ToString('X4'))"
           }
           
-          # 2. Force 32BITREQ flag (FULL PATH to corflags)
-          $corflagsPath = "C:\Program Files\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
+          # Force 32BITREQ
+          $corflagsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
           if (-not (Test-Path $corflagsPath)) {
-            $corflagsPath = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
+            $corflagsPath = "C:\Program Files\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe"
           }
           
           Write-Host "🔧 Setting 32BITREQ flag with: $corflagsPath"
           & $corflagsPath $dll.FullName /32BITREQ+ /nologo
           
-          # 3. Verify final state
+          # Verify (ignore header, check key flags)
           $corflagsOutput = & $corflagsPath $dll.FullName
           Write-Host "🔍 FINAL CorFlags:"
           $corflagsOutput | ForEach-Object { Write-Host "   $_" }
           
-          if ($corflagsOutput -match "32BITREQ\s+:\s+0x1" -and $corflagsOutput -match "PE\s+:\s+PE32\+") {
+          # FIXED: Check for the actual flags (ignore header text)
+          $outputText = $corflagsOutput -join " "
+          if ($outputText -match "PE32\+" -and $outputText -match "32BITREQ\s*:\s*1") {
             Write-Host "🎉🎉🎉 REVIT 2025 READY: Pure x64 DLL ✅✅✅"
+            Write-Host "🚀 DOWNLOAD & DEPLOY NOW!"
           } else {
-            throw "❌ CorFlags verification failed!"
+            throw "❌ Missing required flags!"
           }
 
       - name: 📤 Upload DOWNLOADABLE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MyRevitAddin-pure-x64
+          name: MyRevitAddin-pure-x64-REVIT2025
           path: |
             bin/x64/Release/net8.0-windows/MyRevitAddin.dll
-            bin/Release/**/MyRevitAddin.dll
-          retention-days: 30
+          retention-days: 90
