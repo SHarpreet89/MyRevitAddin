@@ -1,4 +1,4 @@
-name: Build TESTPLUGIN (Ultimate Edition)
+name: Build XYZ (Ultimate Edition)
 on:
   workflow_dispatch:
   push:
@@ -23,8 +23,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: 🏗️ Build TESTPLUGIN x64
-        run: msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /v:minimal
+      - name: 🏗️ Build XYZ x64
+        run: msbuild XYZ.csproj /p:Configuration=Release /p:Platform=x64 /v:minimal
       
       - name: 🔬 FULL DIAGNOSTICS
         shell: pwsh
@@ -33,10 +33,10 @@ jobs:
           Write-Host "🔍 CRITICAL DIAGNOSTICS FOR LINE 146 CRASH" -ForegroundColor Yellow
           Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
           
-          $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1
+          $dll = Get-ChildItem -Recurse -Filter "XYZ.dll" | Select-Object -First 1
           
           if (-not $dll) {
-            Write-Host "❌ TESTPLUGIN.dll NOT FOUND!" -ForegroundColor Red
+            Write-Host "❌ XYZ.dll NOT FOUND!" -ForegroundColor Red
             exit 1
           }
           
@@ -75,7 +75,7 @@ jobs:
 
           for ($i = 0; $i -lt $lines.Length; $i++) {
             $line = $lines[$i].Trim()
-            if ($line -match "^\.assembly\s+TESTPLUGIN") {
+            if ($line -match "^\.assembly\s+XYZ") {
               $inAssembly = $true
             }
             if ($inAssembly -and $line -match "^\.ver\s+\d+:\d+:\d+:\d+") {
@@ -122,17 +122,17 @@ jobs:
           Write-Host "   PE Type: $pe (must be PE32+)" -ForegroundColor White
           Write-Host "   ILONLY: $ilonly (must be 1)" -ForegroundColor White
           Write-Host "   32BITREQ: $req32bit (must be 0)" -ForegroundColor White
-          Write-Host "`n💡 Check journal.txt after deployment for: Assembly Name TESTPLUGIN, Version 1.0.0.0" -ForegroundColor Cyan
+          Write-Host "`n💡 Check journal.txt after deployment for: Assembly Name XYZ, Version 1.0.0.0" -ForegroundColor Cyan
           Write-Host "`n"
       
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TESTPLUGIN-${{ github.sha }}
+          name: XYZ-${{ github.sha }}
           path: |
-            bin/x64/Release/TESTPLUGIN.dll
-            bin/x64/Release/TESTPLUGIN.pdb
-            TESTPLUGIN.addin
+            bin/x64/Release/XYZ.dll
+            bin/x64/Release/XYZ.pdb
+            XYZ.addin
           retention-days: 90
       
       - name: 🎯 Show Download Instructions
@@ -147,9 +147,9 @@ jobs:
           Write-Host "   1. Go to https://github.com/${{ github.repository }}/actions"
           Write-Host "   2. Click this workflow run"
           Write-Host "   3. Scroll to 'Artifacts' section"
-          Write-Host "   4. Download TESTPLUGIN-${{ github.sha }}.zip"
+          Write-Host "   4. Download XYZ-${{ github.sha }}.zip"
           Write-Host "`n📁 DEPLOY TO:" -ForegroundColor Cyan
           Write-Host "   C:\ProgramData\Autodesk\Revit\Addins\2025\"
-          Write-Host "   - TESTPLUGIN.dll"
-          Write-Host "   - TESTPLUGIN.addin"
+          Write-Host "   - XYZ.dll"
+          Write-Host "   - XYZ.addin"
           Write-Host "`n"
