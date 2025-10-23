@@ -5,8 +5,10 @@
     <AssemblyName>MyRevitAddin</AssemblyName>
     <RootNamespace>MyRevitAddin</RootNamespace>
     
-    <!-- Let MSBuild handle platform -->
+    <!-- CRITICAL: Pure x64, NO 32-bit flags -->
     <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <Requires32Bit>false</Requires32Bit>
     
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
