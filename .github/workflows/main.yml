@@ -30,57 +30,63 @@ jobs:
           Copy-Item $apiUI.FullName RevitAPIUI.dll -Force
           Write-Host "✅ Revit API DLLs staged"
 
-      - name: 🏗️ MSBuild Pure x64 (Revit 2025 Compatible)
+      - name: 🏗️ MSBuild Pure x64
         shell: pwsh
         run: |
-          # Use MSBuild directly (not dotnet build) with explicit x64
           & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" MyRevitAddin.csproj `
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:TargetFramework=net8.0-windows `
             /p:PlatformTarget=x64 `
-            /p:RuntimeIdentifier=win-x64 `
             /t:Restore,Build `
-            /maxcpucount
+            /maxcpucount `
+            /v:minimal
 
-            - name: 🔧 Force 32BITREQ Flag (Revit Requirement)
-              shell: pwsh
-              run: |
-                # Find DLL dynamically (handles any folder structure)
-                $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | Select-Object -First 1
-                
-                if (-not $dll) {
-                  Write-Host "❌ Searching all DLLs:"
-                  Get-ChildItem -Recurse -Name "*.dll" | ForEach-Object { Write-Host "Found: $_" }
-                  throw "❌ MyRevitAddin.dll not found in Release/x64 folders!"
-                }
-                
-                Write-Host "🔍 Found DLL: $($dll.FullName)"
-                
-                # FORCE 32BITREQ flag using corflags
-                & corflags $dll.FullName /32BITREQ+ /nologo
-                
-                # Verify the fix
-                $corflags = & corflags $dll.FullName
-                Write-Host "🔍 FINAL CorFlags:"
-                $corflags | ForEach-Object { Write-Host "   $_" }
-                
-                if ($corflags -match "32BITREQ\s+:\s+0x1") {
-                  Write-Host "✅✅✅ 32BITREQ SET - Revit 2025 READY ✅✅✅"
-                } else {
-                  throw "❌ 32BITREQ flag NOT set!"
-                }
+      - name: 🔧 Force 32BITREQ + Verify
+        shell: pwsh
+        run: |
+          # Find the Release/x64 DLL
+          $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | 
+                 Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | 
+                 Select-Object -First 1
+          
+          if (-not $dll) {
+            Write-Host "❌ All DLLs found:"
+            Get-ChildItem -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "$($_.DirectoryName)\$($_.Name)" }
+            throw "❌ No Release/x64 MyRevitAddin.dll found!"
+          }
+          
+          Write-Host "🎯 TARGET DLL: $($dll.FullName)"
+          
+          # 1. Check PE Header (must be x64)
+          $bytes = [System.IO.File]::ReadAllBytes($dll.FullName)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          Write-Host "🔍 PE Machine: 0x$($machine.ToString('X4'))"
+          
+          if ($machine -ne 0x8664) {
+            throw "❌ NOT x64 PE Header! Got: 0x$($machine.ToString('X4'))"
+          }
+          
+          # 2. Force 32BITREQ flag
+          Write-Host "🔧 Setting 32BITREQ flag..."
+          & corflags $dll.FullName /32BITREQ+ /nologo
+          
+          # 3. Verify final state
+          $corflags = & corflags $dll.FullName
+          Write-Host "🔍 FINAL CorFlags:"
+          $corflags | ForEach-Object { Write-Host "   $_" }
+          
+          if ($corflags -match "32BITREQ\s+:\s+0x1" -and $corflags -match "PE\s+:\s+PE32\+") {
+            Write-Host "🎉🎉🎉 REVIT 2025 READY: Pure x64 DLL ✅✅✅"
+          } else {
+            throw "❌ CorFlags verification failed!"
+          }
 
-      - name: 📤 Upload artifact
+      - name: 📤 Upload ALL build outputs
         uses: actions/upload-artifact@v4
         with:
           name: MyRevitAddin-pure-x64
           path: |
-            bin/x64/Release/**
-            bin/Release/**
-
-      - name: 📤 Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MyRevitAddin-pure-x64
-          path: bin/x64/Release/net8.0-windows/
+            bin/**
+            publish/**
