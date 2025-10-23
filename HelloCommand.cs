@@ -15,7 +15,7 @@ namespace TESTPLUGIN
             try
             {
                 File.AppendAllText(logPath, "Execute called at: " + DateTime.Now + Environment.NewLine);
-                TaskDialog.Show("Debug", "TESTPLUGIN executed successfully!");
+                TaskDialog.Show("TESTPLUGIN", "HelloCommand executed successfully!");
                 return Result.Succeeded;
             }
             catch (Exception ex)
