@@ -1,18 +1,17 @@
-name: Build TESTPLUGIN (.NET 4.8 - FINAL)
+name: Build TESTPLUGIN (.NET 4.8 - FULL DIAGNOSTICS)
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: 🧩 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-
+      
       - name: 📦 Download Revit API DLLs
         shell: pwsh
         env:
@@ -22,23 +21,118 @@ jobs:
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
-
+      
       - name: 🏗️ MSBuild TESTPLUGIN x64
         run: |
           msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /maxcpucount /v:normal
-
-      - name: 🔍 List & Verify
+      
+      - name: 🔬 DEEP DIAGNOSTICS - All DLL Metadata
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse -Name "*.dll" -Filter "*TESTPLUGIN*" | ForEach-Object { Write-Host "📁 $_" }
+          Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+          Write-Host "🔍 CRITICAL DIAGNOSTICS FOR LINE 146 CRASH" -ForegroundColor Yellow
+          Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+          
           $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1
-          Write-Host "🎯 FULL PATH: $($dll.FullName)"
+          
+          if (-not $dll) {
+            Write-Host "❌ TESTPLUGIN.dll NOT FOUND!" -ForegroundColor Red
+            exit 1
+          }
+          
+          Write-Host "`n📁 DLL Location: $($dll.FullName)" -ForegroundColor Green
+          Write-Host "📊 File Size: $([math]::Round($dll.Length/1KB, 2)) KB" -ForegroundColor Green
+          Write-Host "📅 Created: $($dll.CreationTime)" -ForegroundColor Green
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "1️⃣ CORFLAGS CHECK (32-bit vs 64-bit)" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
           & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll.FullName
-
-      - name: 📤 Upload
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "2️⃣ ASSEMBLY VERSION & METADATA" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          try {
+            [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($dll.FullName) | Format-List FullName, ImageRuntimeVersion, GlobalAssemblyCache
+          } catch {
+            Write-Host "⚠️ Reflection Load Failed: $_" -ForegroundColor Yellow
+          }
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "3️⃣ DUMPBIN - PE HEADERS (Architecture)" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\dumpbin.exe" /headers $dll.FullName | Select-String -Pattern "(machine|magic|subsystem)"
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "4️⃣ DUMPBIN - NATIVE DEPENDENCIES (Mixed Mode Check)" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          $deps = & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.42.34433\bin\Hostx64\x64\dumpbin.exe" /dependents $dll.FullName
+          Write-Host $deps
+          
+          if ($deps -match "msvcr|msvcp|vcruntime") {
+            Write-Host "⚠️ MIXED MODE DETECTED - C++ Runtime Dependencies Found!" -ForegroundColor Red
+          } else {
+            Write-Host "✅ Pure Managed Assembly - No Native Dependencies" -ForegroundColor Green
+          }
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "5️⃣ ILDASM - IL CODE VALIDATION" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\ildasm.exe" /text /nobar $dll.FullName | Select-String -Pattern "(\.assembly|\.class|\.method.*Execute)" | Select-Object -First 20
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "6️⃣ STRONG NAME & SIGNING STATUS" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\sn.exe" -vf $dll.FullName
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "7️⃣ REFERENCED ASSEMBLIES (RevitAPI Check)" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          try {
+            $asm = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($dll.FullName)
+            $asm.GetReferencedAssemblies() | Format-Table Name, Version, ProcessorArchitecture -AutoSize
+          } catch {
+            Write-Host "⚠️ Cannot read references: $_" -ForegroundColor Yellow
+          }
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "8️⃣ FILE INTEGRITY & CHECKSUM" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          $hash = Get-FileHash $dll.FullName -Algorithm SHA256
+          Write-Host "SHA256: $($hash.Hash)"
+          
+          Write-Host "`n" + "─"*50 -ForegroundColor DarkGray
+          Write-Host "9️⃣ COMPARISON WITH REVIT API DLLs" -ForegroundColor Cyan
+          Write-Host "─"*50 -ForegroundColor DarkGray
+          Write-Host "RevitAPI.dll:"
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" RevitAPI.dll | Select-String -Pattern "(PE|32BIT|ILONLY)"
+          
+          Write-Host "`n" + "═"*50 -ForegroundColor Cyan
+          Write-Host "✅ DIAGNOSTICS COMPLETE" -ForegroundColor Green
+          Write-Host "═"*50 -ForegroundColor Cyan
+          Write-Host "`n📋 CRITICAL INDICATORS FOR LINE 146:" -ForegroundColor Yellow
+          Write-Host "   • PE = PE32+ (not PE32)" -ForegroundColor White
+          Write-Host "   • 32BITREQ = 0" -ForegroundColor White
+          Write-Host "   • ILONLY = 1" -ForegroundColor White
+          Write-Host "   • No MSVCR/MSVCP dependencies" -ForegroundColor White
+          Write-Host "   • Assembly Version = 1.0.0.0" -ForegroundColor White
+          Write-Host "`n"
+      
+      - name: 📤 Upload DLL + Diagnostic Report
         uses: actions/upload-artifact@v4
         with:
-          name: TESTPLUGIN-REVIT2025-FINAL
+          name: TESTPLUGIN-REVIT2025-DIAGNOSTICS
           path: |
             **/TESTPLUGIN.dll
+            **/TESTPLUGIN.pdb
           retention-days: 90
+      
+      - name: 📊 Generate Summary Report
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1
+          
+          Write-Host "`n🎯 QUICK REFERENCE FOR REVIT 2025:" -ForegroundColor Cyan
+          Write-Host "   DLL Path: $($dll.FullName)"
+          Write-Host "   Size: $([math]::Round($dll.Length/1KB, 2)) KB"
+          Write-Host "`n📧 Share these logs with diagnostics above!"
