@@ -18,7 +18,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # 🧠 Verify that Windows Desktop Runtime 8.0 is available
       - name: 🧠 Verify .NET Windows Desktop runtime
         shell: pwsh
         run: |
@@ -31,7 +30,6 @@ jobs:
             throw "❌ Missing WindowsDesktop.App 8.0 runtime — Revit add-ins need net8.0-windows SDK!"
           }
 
-      # 📦 Download and verify Revit API DLLs
       - name: 📦 Download Revit API DLLs via gh
         shell: pwsh
         env:
@@ -67,11 +65,9 @@ jobs:
           Copy-Item $apiUI.FullName -Destination (Join-Path $PWD 'RevitAPIUI.dll') -Force
           Write-Host "✅ Staged Revit API DLLs in repo root."
 
-      # 🏗️ Publish for 64-bit architecture (Amd64)
-      - name: 🏗️ Publish for Windows x64
-        run: dotnet publish MyRevitAddin.csproj -c Release -r win-x64 --no-self-contained
+      - name: 🏗️ Build 64-bit Revit add-in
+        run: dotnet build MyRevitAddin.csproj --configuration Release --property PlatformTarget=x64 --runtime win-x64
 
-      # 🔍 Inspect compiled DLL
       - name: 🔍 Inspect compiled DLL
         shell: pwsh
         run: |
@@ -85,14 +81,13 @@ jobs:
           $size = (Get-Item $dll.FullName).Length
           Write-Host " - File size: $size bytes"
           if ($asm.ProcessorArchitecture -ne "Amd64") {
-            throw "❌ Still not Amd64!  Revit requires 64-bit IL."
+            throw "❌ Still not Amd64! Revit requires 64-bit IL."
           } else {
             Write-Host "✅ Confirmed Amd64 architecture — ready for Revit 2025."
           }
 
-      # 📤 Upload artifact
       - name: 📤 Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: MyRevitAddin
-          path: bin/Release/net8.0-windows/win-x64/publish/
+          path: bin/Release/
