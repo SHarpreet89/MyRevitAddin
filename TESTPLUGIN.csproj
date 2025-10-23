@@ -13,8 +13,10 @@
     <FileAlignment>512</FileAlignment>
     <PlatformTarget>x64</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <NoWarn>1701,1702</NoWarn>
+    
+    <!-- 🔥 FIX LINE 146: Force Revit-expected version -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>2025.0.0.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
@@ -34,12 +36,10 @@
     <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
       <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <Reference Include="RevitAPIUI">
       <HintPath>RevitAPIUI.dll</HintPath>
       <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
   </ItemGroup>
 
