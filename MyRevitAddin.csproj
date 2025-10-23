@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Revit 2025 runs on .NET 8 Windows Desktop -->
+    <!-- Revit 2025 runs on .NET 8 -->
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>Library</OutputType>
 
-    <!-- Force native 64-bit -->
+    <!-- Force x64 build -->
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
@@ -16,12 +16,11 @@
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
 
-    <!-- Simplify build paths -->
+    <!-- Simplify output path -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <BaseOutputPath>bin\Release\</BaseOutputPath>
   </PropertyGroup>
 
-  <!-- Revit 2025 API references -->
   <ItemGroup>
     <Reference Include="RevitAPI">
       <HintPath>RevitAPI.dll</HintPath>
