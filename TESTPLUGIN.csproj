@@ -8,7 +8,7 @@
     <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
     <ProjectGuid>{12345678-1234-1234-1234-123456789ABC}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>MyRevitAddin</RootNamespace>
+    <RootNamespace>XYZ</RootNamespace>
     <AssemblyName>TESTPLUGIN</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -54,3 +54,4 @@
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
+
