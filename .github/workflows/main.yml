@@ -1,4 +1,4 @@
-name: Build Revit Addin (.NET 8 - Pure x64 NO 32BITREQ)
+name: Build Revit Addin (.NET 8 - Pure x64)
 on:
   workflow_dispatch:
   push:
@@ -8,11 +8,8 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 🧾 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 🧩 Setup .NET 8 SDK
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
@@ -25,27 +22,23 @@ jobs:
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
-          Write-Host "✅ Revit API DLLs staged"
 
-      - name: 🏗️ MSBuild Pure x64
+      - name: 🏗️ dotnet publish Pure x64
+        run: |
+          dotnet publish MyRevitAddin.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o ./publish
+
+      - name: 🔍 Verify
         shell: pwsh
         run: |
-          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" MyRevitAddin.csproj /p:Configuration=Release /p:Platform=x64 /p:TargetFramework=net8.0-windows /p:PlatformTarget=x64 /p:Prefer32Bit=false /p:Requires32Bit=false /t:Restore,Build /maxcpucount /v:minimal
-
-      - name: 🔍 Verify DLL (Simple)
-        shell: pwsh
-        run: |
-          $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | Where-Object { $_.FullName -match "Release" -and $_.FullName -match "x64" } | Select-Object -First 1
-          Write-Host "🎯 DLL: $($dll.FullName)"
-          $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll.FullName)
+          $dll = "./publish/MyRevitAddin.dll"
+          Write-Host "🎯 DLL: $dll"
+          $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll)
           Write-Host "   Architecture: $($asm.ProcessorArchitecture)"
-          corflags $dll.FullName
-          Write-Host "✅ Build complete - check 32BITREQ: 0 above"
+          & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
-          name: MyRevitAddin-REVIT2025-CORRECT
-          path: |
-            bin/x64/Release/net8.0-windows/MyRevitAddin.dll
+          name: MyRevitAddin-REVIT2025
+          path: ./publish/MyRevitAddin.dll
           retention-days: 90
