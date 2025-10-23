@@ -1,17 +1,16 @@
-name: 🔍 DIAGNOSE TESTPLUGIN IL Failure
+name: Build TESTPLUGIN (.NET 4.8 - FINAL)
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
 
 jobs:
-  diagnose:
+  build:
     runs-on: windows-latest
     steps:
-      - name: 🧾 Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🧩 Setup MSBuild + Tools
+      - name: 🧩 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: 📦 Download Revit API DLLs
@@ -19,70 +18,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $ErrorActionPreference = 'Stop'
           gh release download v1.0.0 --repo SHarpreet89/MyRevitAddin --pattern RevitApis.zip --dir .
           Expand-Archive RevitApis.zip -DestinationPath revapi -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPI.dll' | Select -First 1).FullName RevitAPI.dll -Force
           Copy-Item (Get-ChildItem -Recurse revapi -Filter 'RevitAPIUI.dll' | Select -First 1).FullName RevitAPIUI.dll -Force
-          Write-Host "✅ Revit API DLLs staged"
 
-      - name: 🏗️ Build + FULL IL ANALYSIS
+      - name: 🏗️ MSBuild TESTPLUGIN x64
+        run: |
+          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /maxcpucount /v:normal
+
+      - name: 🔍 List & Verify
         shell: pwsh
         run: |
-          # Build with max verbosity
-          Write-Host "🔨 Building TESTPLUGIN.csproj..."
-          msbuild TESTPLUGIN.csproj /p:Configuration=Release /p:Platform=x64 /maxcpucount /v:diagnostic > build.log 2>&1
-          
-          # Find DLL
+          Get-ChildItem -Recurse -Name "*.dll" -Filter "*TESTPLUGIN*" | ForEach-Object { Write-Host "📁 $_" }
           $dll = Get-ChildItem -Recurse -Filter "TESTPLUGIN.dll" | Select-Object -First 1
-          if (-not $dll) {
-            Get-ChildItem -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "📁 ALL DLLs: $($_.FullName)" }
-            throw "❌ TESTPLUGIN.dll not found!"
-          }
-          Write-Host "🎯 DLL: $($dll.FullName)"
-          
-          # 1. CorFlags
-          Write-Host "`n🔍 CORFLAGS:"
+          Write-Host "🎯 FULL PATH: $($dll.FullName)"
           & "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\corflags.exe" $dll.FullName
-          
-          # 2. PE Headers
-          Write-Host "`n🔍 PE HEADERS:"
-          $bytes = [System.IO.File]::ReadAllBytes($dll.FullName)
-          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
-          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
-          Write-Host "Machine: 0x$($machine.ToString('X4')) (x64=8664)"
-          
-          # 3. ILDASM (Decompile IL)
-          Write-Host "`n🔍 DECOMPILING IL..."
-          ildasm $dll.FullName /text > il.txt
-          Write-Host "`n🔍 IL SAMPLE (first 50 lines):"
-          Get-Content il.txt -TotalCount 50
-          
-          # 4. Dependency Analysis
-          Write-Host "`n🔍 ASSEMBLY REFERENCES:"
-          try {
-            $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll.FullName)
-            $asm.GetReferencedAssemblies() | ForEach-Object { Write-Host "  -> $($_.FullName)" }
-          } catch {
-            Write-Host "❌ Cannot read references: $_"
-          }
-          
-          # 5. TRY LOAD IN .NET 4.8
-          Write-Host "`n🔍 LOAD TEST (.NET 4.8):"
-          try {
-            Add-Type -Path $dll.FullName -ErrorAction Stop
-            Write-Host "✅ .NET 4.8 LOAD SUCCESS!"
-          } catch {
-            Write-Host "❌ .NET 4.8 LOAD FAILED: $_"
-          }
 
-      - name: 📤 Upload Diagnostics
+      - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
-          name: TESTPLUGIN-DIAGNOSTICS
+          name: TESTPLUGIN-REVIT2025-FINAL
           path: |
-            **/*.log
-            **/il.txt
-            **/*.dll
-            **/TESTPLUGIN.*
-          retention-days: 30
+            **/TESTPLUGIN.dll
+          retention-days: 90
