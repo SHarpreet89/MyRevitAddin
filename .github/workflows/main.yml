@@ -18,21 +18,20 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # 🧠 Verify .NET Windows Desktop runtime
+      # 🧠 Verify that Windows Desktop Runtime 8.0 is available
       - name: 🧠 Verify .NET Windows Desktop runtime
         shell: pwsh
         run: |
           $runtimes = dotnet --list-runtimes
           Write-Host "Installed runtimes:`n$runtimes"
-          # Normalize whitespace (in case everything is printed on one line)
           $normalized = ($runtimes -replace '\s+', ' ')
           if ($normalized -match 'Microsoft\.WindowsDesktop\.App\s*8\.0') {
             Write-Host "✅ WindowsDesktop.App 8.0 runtime detected."
           } else {
-            throw "❌ Missing WindowsDesktop.App — Revit add-ins need net8.0-windows SDK!"
+            throw "❌ Missing WindowsDesktop.App 8.0 runtime — Revit add-ins need net8.0-windows SDK!"
           }
 
-      # 📦 Download Revit API DLLs via gh
+      # 📦 Download and verify Revit API DLLs
       - name: 📦 Download Revit API DLLs via gh
         shell: pwsh
         env:
@@ -45,7 +44,6 @@ jobs:
 
           Write-Host "📥 Downloading $asset from $repo@$tag ..."
           gh release download $tag --repo $repo --pattern $asset --dir .
-
           if (-not (Test-Path $asset)) { throw "❌ $asset was not downloaded." }
 
           $extractDir = Join-Path $PWD 'revapi'
@@ -53,55 +51,43 @@ jobs:
           New-Item -ItemType Directory -Path $extractDir | Out-Null
           Expand-Archive -Path $asset -DestinationPath $extractDir -Force
 
-          # Find both DLLs
           $api   = Get-ChildItem -Recurse $extractDir -Filter 'RevitAPI.dll'    | Select-Object -First 1
           $apiUI = Get-ChildItem -Recurse $extractDir -Filter 'RevitAPIUI.dll' | Select-Object -First 1
-          if (-not $api -or -not $apiUI) {
-            Get-ChildItem -Recurse $extractDir | ForEach-Object { Write-Host $_.FullName }
-            throw "❌ RevitAPI.dll and/or RevitAPIUI.dll not found in ZIP."
-          }
+          if (-not $api -or -not $apiUI) { throw "❌ Missing Revit API DLLs in ZIP." }
 
-          # ✅ Validate FILE VERSION (not size). Expect 25.* for Revit 2025.
           function Get-Ver($p) { ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($p)).FileVersion }
           $verApi   = Get-Ver $api.FullName
           $verApiUI = Get-Ver $apiUI.FullName
-          Write-Host "🔎 Versions -> RevitAPI: $verApi | RevitAPIUI: $verApiUI"
-          if ($verApi   -notmatch '^25\.' ) { throw "❌ RevitAPI.dll version ($verApi) is not 25.* (wrong year or corrupted)." }
-          if ($verApiUI -notmatch '^25\.' ) { throw "❌ RevitAPIUI.dll version ($verApiUI) is not 25.* (wrong year or corrupted)." }
+          Write-Host "🔎 Versions → RevitAPI: $verApi | RevitAPIUI: $verApiUI"
 
-          # Stage them to repo root for HintPath
+          if ($verApi -notmatch '^25\.')   { throw "❌ Wrong RevitAPI.dll version ($verApi)" }
+          if ($verApiUI -notmatch '^25\.') { throw "❌ Wrong RevitAPIUI.dll version ($verApiUI)" }
+
           Copy-Item $api.FullName   -Destination (Join-Path $PWD 'RevitAPI.dll')   -Force
           Copy-Item $apiUI.FullName -Destination (Join-Path $PWD 'RevitAPIUI.dll') -Force
-          Write-Host "✅ Staged RevitAPI DLLs in repo root."
+          Write-Host "✅ Staged Revit API DLLs in repo root."
 
-      # 🏗️ Build for Windows x64 (explicit)
-      - name: 🏗️ Build (Release, net8.0-windows, x64)
-        run: dotnet build MyRevitAddin.csproj --configuration Release -r win-x64
+      # 🏗️ Publish for 64-bit architecture (Amd64)
+      - name: 🏗️ Publish for Windows x64
+        run: dotnet publish MyRevitAddin.csproj -c Release -r win-x64 --no-self-contained
 
       # 🔍 Inspect compiled DLL
       - name: 🔍 Inspect compiled DLL
         shell: pwsh
         run: |
           $dll = Get-ChildItem -Recurse -Filter "MyRevitAddin.dll" | Select-Object -First 1
-          if (-not $dll) {
-            throw "❌ MyRevitAddin.dll not found in any build folder!"
-          }
+          if (-not $dll) { throw "❌ MyRevitAddin.dll not found!" }
           Write-Host "Inspecting: $($dll.FullName)"
-          try {
-            $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll.FullName)
-            Write-Host " - Name: $($asm.Name)"
-            Write-Host " - Version: $($asm.Version)"
-            Write-Host " - ProcessorArchitecture: $($asm.ProcessorArchitecture)"
-            $size = (Get-Item $dll.FullName).Length
-            Write-Host " - File size: $size bytes"
-            if ($asm.ProcessorArchitecture -ne "Amd64") {
-              throw "❌ Build produced non-x64 IL (was $($asm.ProcessorArchitecture)). Revit requires Amd64."
-            } else {
-              Write-Host "✅ Build confirmed Amd64 architecture."
-            }
-          } catch {
-            Write-Host "❌ Failed to read assembly metadata: $($_.Exception.Message)"
-            exit 1
+          $asm = [System.Reflection.AssemblyName]::GetAssemblyName($dll.FullName)
+          Write-Host " - Name: $($asm.Name)"
+          Write-Host " - Version: $($asm.Version)"
+          Write-Host " - ProcessorArchitecture: $($asm.ProcessorArchitecture)"
+          $size = (Get-Item $dll.FullName).Length
+          Write-Host " - File size: $size bytes"
+          if ($asm.ProcessorArchitecture -ne "Amd64") {
+            throw "❌ Still not Amd64!  Revit requires 64-bit IL."
+          } else {
+            Write-Host "✅ Confirmed Amd64 architecture — ready for Revit 2025."
           }
 
       # 📤 Upload artifact
@@ -109,4 +95,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MyRevitAddin
-          path: bin/Release/net8.0-windows/
+          path: bin/Release/net8.0-windows/win-x64/publish/
